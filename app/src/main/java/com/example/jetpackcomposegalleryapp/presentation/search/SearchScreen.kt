@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
+import kotlinx.collections.immutable.persistentSetOf
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -226,7 +227,7 @@ private fun ActiveSearchContent(
                     currentViewMode = state.currentViewMode,
                     gridState = gridState,
                     selectionMode = false,
-                    selectedMediaIds = emptySet(),
+                    selectedMediaIds = persistentSetOf(),
                     onMediaClick = { onEvent(SearchEvent.OnMediaClicked(it)) },
                     onToggleSelection = { },
                     onEnterSelectionMode = { },

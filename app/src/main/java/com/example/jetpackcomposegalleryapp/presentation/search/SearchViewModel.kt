@@ -10,6 +10,7 @@ import com.example.jetpackcomposegalleryapp.presentation.search.contract.SearchE
 import com.example.jetpackcomposegalleryapp.presentation.search.contract.SearchEvent
 import com.example.jetpackcomposegalleryapp.presentation.search.contract.SearchState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -62,7 +63,7 @@ class SearchViewModel @Inject constructor(
                 searchQueryFlow.value = event.query
             }
             SearchEvent.ClearSearch -> {
-                setState { copy(query = "", groupedResults = emptyMap(), isSearching = false) }
+                setState { copy(query = "", groupedResults = persistentMapOf(), isSearching = false) }
                 searchQueryFlow.value = ""
             }
             is SearchEvent.OnMediaClicked -> setEffect { SearchEffect.NavigateToDetail(event.mediaId) }
@@ -81,7 +82,7 @@ class SearchViewModel @Inject constructor(
                 .distinctUntilChanged()
                 .collectLatest { query ->
                     if (query.isBlank()) {
-                        setState { copy(groupedResults = emptyMap(), isSearching = false) }
+                        setState { copy(groupedResults = persistentMapOf(), isSearching = false) }
                         return@collectLatest
                     }
 
