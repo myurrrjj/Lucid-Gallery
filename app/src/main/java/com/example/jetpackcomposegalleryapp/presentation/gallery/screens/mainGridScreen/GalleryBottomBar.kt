@@ -45,7 +45,7 @@ fun SharedTransitionScope.GalleryBottomBar(
     onTabClick: () -> Job,
     onTabSelected: (GalleryTab) -> Unit
 ) {
-    val shouldShowBar by remember(hasContent, isScrollingUp) {
+    val shouldShowBar by remember(hasContent) {
         derivedStateOf { !hasContent || isScrollingUp }
     }
     val bottomBarVisible = selectionMode || (isMainGallery && shouldShowBar)

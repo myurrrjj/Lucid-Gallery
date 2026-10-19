@@ -121,7 +121,7 @@ fun GalleryNavGraph() {
     SharedTransitionLayout {
         NavHost(
             navController = navController,
-            startDestination = DirtyTest,
+            startDestination = Gallery,
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),

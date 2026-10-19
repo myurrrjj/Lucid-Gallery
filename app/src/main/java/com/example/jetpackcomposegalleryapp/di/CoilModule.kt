@@ -27,13 +27,13 @@ object CoilModule {
             }
             .memoryCache {
                 MemoryCache.Builder(context)
-                    .maxSizePercent(1.0)
+                    .maxSizePercent(.25)
                     .build()
             }
             .diskCache {
                 DiskCache.Builder()
                     .directory(context.cacheDir.resolve("gallery_image_cache"))
-                    .maxSizePercent(1.0)
+                    .maxSizeBytes(256L * 1024 * 1024)
                     .build()
             }
             .respectCacheHeaders(false)

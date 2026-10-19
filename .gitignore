@@ -13,3 +13,7 @@
 .externalNativeBuild
 .cxx
 local.properties
+model.tflite
+a1.jpg
+person_a
+person_b

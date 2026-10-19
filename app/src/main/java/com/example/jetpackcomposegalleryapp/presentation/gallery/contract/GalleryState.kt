@@ -9,7 +9,11 @@ import com.example.jetpackcomposegalleryapp.presentation.gallery.model.Album
 import com.example.jetpackcomposegalleryapp.presentation.gallery.model.GalleryTab
 import com.example.jetpackcomposegalleryapp.presentation.gallery.model.OthersSelection
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
 
 data class GalleryUiConfig(
     val isLoading: Boolean = true,
@@ -23,12 +27,11 @@ data class MediaContentState(
     val masterMediaList: ImmutableList<MediaAsset> = persistentListOf(),
     val displayedMediaList: ImmutableList<MediaAsset> = persistentListOf(),
     val favouriteMediaList: ImmutableList<MediaAsset> = persistentListOf(),
-    val favoriteMediaIds: Set<Long> = emptySet(),
-    val groupedMedia: Map<String, List<MediaAsset>> = emptyMap(),
+    val favoriteMediaIds: ImmutableSet<Long> = persistentSetOf(),
+    val groupedMedia: ImmutableMap<String, ImmutableList<MediaAsset>> = persistentMapOf(),
     val albums: ImmutableList<Album> = persistentListOf(),
     val peopleClusters: ImmutableList<PersonCluster> = persistentListOf()
 )
-
 
 data class InteractionState(
     val selectedTab: GalleryTab = GalleryTab.ALL,
@@ -36,7 +39,7 @@ data class InteractionState(
     val openedAlbum: Album? = null,
     val openedPersonCluster: PersonCluster? = null,
     val selectionMode: Boolean = false,
-    val selectedMediaIds: Set<Long> = emptySet()
+    val selectedMediaIds: ImmutableSet<Long> = persistentSetOf()
 )
 
 data class GalleryState(

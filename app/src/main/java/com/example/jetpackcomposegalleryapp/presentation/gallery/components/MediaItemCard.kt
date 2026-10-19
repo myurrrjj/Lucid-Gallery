@@ -52,8 +52,10 @@ fun MediaItemCard(
 ) {
     val context = LocalContext.current
     val imageRequest = remember(media.uriString, media.id, size) {
-        ImageRequest.Builder(context).data(media.uriString).size(size)
-            .setParameter("is_thumbnail", true).build()
+        ImageRequest.Builder(context).data(media.uriString)
+//            .size(size)
+            .setParameter("is_thumbnail", true)
+            .build()
     }
 
     val isTiny = size <= 50
