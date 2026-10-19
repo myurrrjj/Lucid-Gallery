@@ -43,7 +43,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.example.jetpackcomposegalleryapp.core.presentation.components.bouncyClick
 import com.example.jetpackcomposegalleryapp.domain.model.MediaAsset
-import com.example.jetpackcomposegalleryapp.presentation.gallery.VideoPlayerOverlay
+import com.example.jetpackcomposegalleryapp.presentation.gallery.screens.VideoPlayerOverlay
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -57,8 +57,6 @@ enum class ControlPosition {
     BOTTOM, LEFT, RIGHT
 }
 
-// FIX: bundles all bar-alignment state into one object, one param instead of seven
-// FIX: across CustomVideoPlayer and VideoPlayerOverlay, and the same object is reused for the photo bar
 data class MediaControlAlignment(
     val controlPosition: ControlPosition,
     val onControlPositionChanged: (ControlPosition) -> Unit,

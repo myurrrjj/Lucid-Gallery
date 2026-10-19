@@ -28,10 +28,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.example.jetpackcomposegalleryapp.core.util.MediaIntents
-import com.example.jetpackcomposegalleryapp.presentation.gallery.DetailScreen
+import com.example.jetpackcomposegalleryapp.presentation.gallery.screens.DetailScreen
 import com.example.jetpackcomposegalleryapp.presentation.gallery.contract.GalleryEffect
 import com.example.jetpackcomposegalleryapp.presentation.gallery.contract.GalleryEvent
-import com.example.jetpackcomposegalleryapp.presentation.gallery.GalleryScreen
+import com.example.jetpackcomposegalleryapp.presentation.gallery.screens.mainGridScreen.GalleryScreen
 import com.example.jetpackcomposegalleryapp.presentation.gallery.GalleryViewModel
 import com.example.jetpackcomposegalleryapp.presentation.navigation.Route.Detail
 import com.example.jetpackcomposegalleryapp.presentation.navigation.Route.DirtyTest
@@ -121,7 +121,7 @@ fun GalleryNavGraph() {
     SharedTransitionLayout {
         NavHost(
             navController = navController,
-            startDestination = Gallery,
+            startDestination = DirtyTest,
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
@@ -177,8 +177,12 @@ fun GalleryNavGraph() {
                 SearchScreen(
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@composable,
-                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateBack = {
+                        sharedViewModel.setEvent(GalleryEvent.ClearSearchMediaList)
+                        navController.popBackStack()
+                    },
                     onNavigateToDetail = { mediaId -> navController.navigate(Detail(mediaId)) },
+                    galleryViewModel = sharedViewModel
                 )
             }
         }

@@ -13,6 +13,7 @@ import com.example.jetpackcomposegalleryapp.domain.model.MediaAsset
 import com.example.jetpackcomposegalleryapp.domain.repository.MediaRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -104,6 +105,13 @@ class MediaStoreRepositoryImpl @Inject constructor(
 
             }
 
+          val masterIds = mediaList.map { it.id }.toSet()
+        val currentFavs = favouriteDao.getFavourites().first()
+        for(fav in currentFavs){
+            if(fav.id !in masterIds){
+                favouriteDao.removeFavourite(fav.id)
+            }
+        }
         emit(mediaList)
     }.flowOn(Dispatchers.IO)
 

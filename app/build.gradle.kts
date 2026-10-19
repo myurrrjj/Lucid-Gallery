@@ -17,9 +17,9 @@ android {
     namespace = "com.example.jetpackcomposegalleryapp"
     compileSdk =36
 
-    aaptOptions {
-        ignoreAssetsPattern = "!model.tflite"
-    }
+//    aaptOptions {
+//        ignoreAssetsPattern = "!model.tflite"
+//    }
     defaultConfig {
         applicationId = "com.example.jetpackcomposegalleryapp"
         minSdk = 28
@@ -28,6 +28,9 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+    androidResources{
+        noCompress+="tflite"
     }
 
     buildTypes {

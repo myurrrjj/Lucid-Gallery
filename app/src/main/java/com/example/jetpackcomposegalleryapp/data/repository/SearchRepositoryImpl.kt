@@ -19,12 +19,21 @@ import javax.inject.Inject
 class SearchRepositoryImpl @Inject constructor(
     private val searchDao: SearchDao
 ) : SearchRepository {
+    @Volatile private var lastSynced:Int?=null
+
     override suspend fun syncSearchIndex(
         mediaList: List<MediaAsset>,
         favouriteIds: Set<Long>
     ): Flow<Float> = flow {
+        val sync = 31 * mediaList.hashCode() + favouriteIds.hashCode()
+        if (sync == lastSynced) {
+            emit(1f)
+            return@flow
+        }
         val total = mediaList.size
         if (total == 0) {
+            searchDao.clearIndex()
+            lastSynced = sync
             emit(1f)
             return@flow
         }
@@ -68,10 +77,14 @@ class SearchRepositoryImpl @Inject constructor(
     }.flowOn(Dispatchers.IO)
 
     override suspend fun searchMediaIds(query: String): List<Long> = withContext(Dispatchers.IO) {
+        val matchQuery = buildPrefixMatchQuery(query)
+        if (matchQuery.isBlank()) emptyList() else searchDao.searchMediaIds(matchQuery)
+    }
 
-        if (query.isBlank()) return@withContext emptyList()
-        val sanitizedQuery = query.replace("\"", "").replace("'", "")
-        searchDao.searchMediaIds("\"$sanitizedQuery*\"")
+    private fun buildPrefixMatchQuery(raw: String): String {
+        return raw.split(Regex("[^\\p{L}\\p{N}]+"))
+            .filter { it.isNotBlank() }
+            .joinToString(" ") { "${it}*" }
     }
 
 }

@@ -23,7 +23,7 @@ interface FaceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMediaProcessingStatuses(statuses: List<MediaProcessingStatusEntity>)
 
-    @Query("SELECT * FROM face_embeddings WHERE mediaId = :mediaId ORDER BY faceIndex ASC")
+    @Query("select * from face_embeddings where mediaId = :mediaId order by faceIndex ASC")
     suspend fun getEmbeddingsForMedia(mediaId: Long): List<FaceEmbeddingEntity>
 
     @Query("SELECT * FROM face_embeddings WHERE embeddingId = :embeddingId")

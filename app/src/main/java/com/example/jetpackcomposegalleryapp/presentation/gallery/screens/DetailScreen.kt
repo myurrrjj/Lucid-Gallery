@@ -1,4 +1,4 @@
-package com.example.jetpackcomposegalleryapp.presentation.gallery
+package com.example.jetpackcomposegalleryapp.presentation.gallery.screens
 
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
@@ -86,6 +86,7 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.ExoPlayer
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.jetpackcomposegalleryapp.presentation.gallery.GalleryViewModel
 import com.example.jetpackcomposegalleryapp.presentation.gallery.contract.GalleryEvent
 import com.example.jetpackcomposegalleryapp.presentation.gallery.components.ControlPosition
 import com.example.jetpackcomposegalleryapp.presentation.gallery.components.CustomVideoPlayer

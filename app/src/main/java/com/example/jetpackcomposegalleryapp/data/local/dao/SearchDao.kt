@@ -11,8 +11,8 @@ interface SearchDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(indices : List<SearchIndexEntity>)
 
-    @Query("SELECT mediaId FROM search_index WHERE search_index MATCH :query || '*'")
-    suspend fun searchMediaIds(query : String) : List<Long>
+    @Query("SELECT mediaId FROM search_index WHERE search_index MATCH :matchQuery")
+    suspend fun searchMediaIds(matchQuery : String) : List<Long>
 
     @Query("DELETE FROM search_index")
     suspend fun clearIndex()

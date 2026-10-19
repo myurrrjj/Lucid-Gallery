@@ -148,7 +148,6 @@ class FaceIndexingWorker @AssistedInject constructor(
                         faceClusterer.clusterEmbeddings(savedEmbeddings, existingClusters)
                     }
                 } finally {
-                    // Ensure all bitmaps are recycled even if cancelled or errored
                     batchResults.forEach { it.second.recycle() }
                 }
                 setForeground(createForegroundInfo("Processed $processedCount of $total images"))

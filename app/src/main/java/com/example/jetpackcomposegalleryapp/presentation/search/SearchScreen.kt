@@ -1,6 +1,5 @@
 package com.example.jetpackcomposegalleryapp.presentation.search
 
-
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.SharedTransitionScope
@@ -15,15 +14,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
@@ -39,6 +36,7 @@ import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,7 +46,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.jetpackcomposegalleryapp.presentation.gallery.components.MediaItemCard
+import com.example.jetpackcomposegalleryapp.presentation.gallery.GalleryViewModel
+import com.example.jetpackcomposegalleryapp.presentation.gallery.components.UniversalMediaGrid
+import com.example.jetpackcomposegalleryapp.presentation.gallery.contract.GalleryEvent
+import com.example.jetpackcomposegalleryapp.presentation.search.contract.SearchEffect
 import com.example.jetpackcomposegalleryapp.presentation.search.contract.SearchEvent
 import com.example.jetpackcomposegalleryapp.presentation.search.contract.SearchState
 
@@ -59,9 +60,24 @@ fun SearchScreen(
     onNavigateToDetail: (Long) -> Unit,
     onNavigateBack: () -> Unit,
     viewModel: SearchViewModel = hiltViewModel(),
+    galleryViewModel: GalleryViewModel,
     sharedTransitionScope: SharedTransitionScope
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        viewModel.effect.collect { effect ->
+            when (effect) {
+                is SearchEffect.NavigateToDetail -> {
+                    val flatResults = viewModel.uiState.value.groupedResults.values.flatten()
+                    galleryViewModel.setEvent(GalleryEvent.SetSearchMediaList(flatResults))
+                    onNavigateToDetail(effect.mediaId)
+                }
+
+                SearchEffect.NavigateBack -> onNavigateBack()
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -78,10 +94,8 @@ fun SearchScreen(
             if (isIndexing) {
                 IndexingOverlay(progress = state.indexingProgress)
             } else {
-
-
                 ActiveSearchContent(
-                    animatedVisibilityScope = this@AnimatedContent,
+                    animatedVisibilityScope = animatedVisibilityScope,
                     state = state,
                     sharedTransitionScope = sharedTransitionScope,
                     onEvent = viewModel::setEvent,
@@ -164,6 +178,8 @@ private fun ActiveSearchContent(
     onNavigateBack: () -> Unit,
     sharedTransitionScope: SharedTransitionScope
 ) {
+    val gridState = rememberLazyGridState()
+
     Column(modifier = Modifier.fillMaxSize()) {
         SearchBar(
             query = state.query,
@@ -205,37 +221,20 @@ private fun ActiveSearchContent(
                     )
                 }
 
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 120.dp),
-                    contentPadding = PaddingValues(
-                        top = 16.dp,
-                        start = 2.dp,
-                        end = 2.dp,
-                        bottom = 100.dp
-                    ),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(
-                        count = state.searchResults.size,
-                        key = { index -> state.searchResults[index].id }
-                    ) { index ->
-                        val mediaItem = state.searchResults[index]
-
-                        MediaItemCard(
-                            media = mediaItem,
-                            isSelected = false,
-                            selectionMode = false,
-                            onClick = { onEvent(SearchEvent.OnMediaClicked(mediaItem.id)) },
-                            onLongClick = { },
-                            modifier = Modifier.animateItem(),
-                            sharedTransitionScope = sharedTransitionScope,
-                            tabAnimatedVisibilityScope = animatedVisibilityScope,
-                            albumAnimatedVisibilityScope = animatedVisibilityScope
-                        )
-                    }
-                }
+                UniversalMediaGrid(
+                    groupedMedia = state.groupedResults,
+                    currentViewMode = state.currentViewMode,
+                    gridState = gridState,
+                    selectionMode = false,
+                    selectedMediaIds = emptySet(),
+                    onMediaClick = { onEvent(SearchEvent.OnMediaClicked(it)) },
+                    onToggleSelection = { },
+                    onEnterSelectionMode = { },
+                    onViewModeChanged = { onEvent(SearchEvent.ChangeViewMode(it)) },
+                    sharedTransitionScope = sharedTransitionScope,
+                    tabAnimatedVisibilityScope = animatedVisibilityScope,
+                    albumAnimatedVisibilityScope = animatedVisibilityScope
+                )
             }
         }
     }

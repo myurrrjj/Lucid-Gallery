@@ -218,6 +218,32 @@ class GalleryViewModel @Inject constructor(
             }
 
             GalleryEvent.onSearchClicked -> setEffect { GalleryEffect.NavigateToSearch }
+            is GalleryEvent.SetSearchMediaList -> {
+                setState {
+                    copy(
+                        contentState = contentState.copy(
+                            displayedMediaList = event.results.toImmutableList()
+                        )
+                    )
+                }
+            }
+            GalleryEvent.ClearSearchMediaList -> {
+                val newDisplayedList = when (uiState.value.interactionState.selectedTab) {
+                    GalleryTab.VIDEOS -> uiState.value.contentState.masterMediaList.filter { it.isVideo }.toPersistentList()
+                    GalleryTab.OTHERS -> if (uiState.value.interactionState.othersSelection == OthersSelection.FAVOURITES) {
+                        uiState.value.contentState.favouriteMediaList
+                    } else persistentListOf()
+                    else -> uiState.value.contentState.masterMediaList
+                }
+                setState {
+                    copy(
+                        contentState = contentState.copy(displayedMediaList = newDisplayedList)
+                    )
+                }
+                regroupMedia(newDisplayedList, uiState.value.configState.currentViewMode)
+            }
+
+
         }
     }
 
@@ -497,7 +523,9 @@ class GalleryViewModel @Inject constructor(
 
     private fun startManualFaceIndexing() {
         val constraints =
-            Constraints.Builder().setRequiresCharging(true).setRequiresBatteryNotLow(true)
+            Constraints.Builder()
+//                .setRequiresCharging(true)
+                .setRequiresBatteryNotLow(true)
                 .setRequiresStorageNotLow(true).build()
 
         val workRequest =

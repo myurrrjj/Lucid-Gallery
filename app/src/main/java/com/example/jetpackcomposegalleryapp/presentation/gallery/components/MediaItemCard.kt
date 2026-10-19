@@ -39,7 +39,7 @@ import com.example.jetpackcomposegalleryapp.domain.model.MediaAsset
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MediaItemCard(
-    size:Int = 300,
+    size: Int = 300,
     media: MediaAsset,
     isSelected: Boolean,
     selectionMode: Boolean,
@@ -51,98 +51,99 @@ fun MediaItemCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val imageRequest = remember(media.uriString, media.id) {
+    val imageRequest = remember(media.uriString, media.id, size) {
         ImageRequest.Builder(context).data(media.uriString).size(size)
             .setParameter("is_thumbnail", true).build()
     }
 
-
+    val isTiny = size <= 50
 
     with(sharedTransitionScope) {
         Box(
             modifier = modifier
                 .aspectRatio(1f)
                 .zIndex(if (sharedTransitionScope.isTransitionActive) 1f else 0f)
-//                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .clip(RoundedCornerShape(12.dp))
-
-
+                .clip(RoundedCornerShape(if (isTiny) 2.dp else 12.dp))
                 .combinedClickable(
                     onClick = onClick, onLongClick = onLongClick
                 )
-
         ) {
-            AsyncImage(
-                model = imageRequest,
-                contentDescription = media.name,
-                contentScale = ContentScale.Crop,
-                filterQuality = FilterQuality.Low,
+            var imageModifier: Modifier = Modifier.fillMaxSize()
 
-                modifier = Modifier
-                    .fillMaxSize()
+            if (!isTiny) {
+                imageModifier = imageModifier
                     .sharedElement(
                         sharedContentState = rememberSharedContentState(key = "media_${media.id}"),
                         animatedVisibilityScope = tabAnimatedVisibilityScope,
-
-//                    resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
                         renderInOverlayDuringTransition = true,
                         clipInOverlayDuringTransition = OverlayClip(RoundedCornerShape(12.dp))
-//                        boundsTransform = { initialRect, targetRect ->
-//                            spring(
-//                                dampingRatio = Spring.DampingRatioNoBouncy,
-//                                stiffness = Spring.StiffnessMedium
-//                            )
-//                        }
                     )
-
                     .sharedElement(
                         sharedContentState = rememberSharedContentState(key = "media_local_${media.id}"),
                         animatedVisibilityScope = albumAnimatedVisibilityScope,
                         renderInOverlayDuringTransition = true,
                         clipInOverlayDuringTransition = OverlayClip(RoundedCornerShape(16.dp))
                     )
-
-            )
-
-            val overlayBrush = remember {
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        Color.Black.copy(alpha = 0.0f),
-                        Color.Black.copy(alpha = 0.5f)
-                    ), startY = 150f
-                )
             }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(overlayBrush)
+            AsyncImage(
+                model = imageRequest,
+                contentDescription = media.name,
+                contentScale = ContentScale.Crop,
+                filterQuality = if (isTiny) FilterQuality.None else FilterQuality.Low,
+                modifier = imageModifier
             )
 
-            if (media.isVideo) {
-                val formattedDuration = remember(media.duration) {
-                    media.duration?.let { formatDuration(it) }
+            if (!isTiny) {
+                val overlayBrush = remember {
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.0f),
+                            Color.Black.copy(alpha = 0.5f)
+                        ), startY = 150f
+                    )
                 }
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(overlayBrush)
+                )
+
+                if (media.isVideo) {
+                    val formattedDuration = remember(media.duration) {
+                        media.duration?.let { formatDuration(it) }
+                    }
+                    Icon(
+                        imageVector = Icons.Rounded.PlayCircle,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.9f),
+                        modifier = Modifier
+                            .size(36.dp)
+                            .align(Alignment.Center)
+                    )
+                    if (formattedDuration != null) {
+                        Text(
+                            text = formattedDuration,
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(8.dp)
+                        )
+                    }
+                }
+            } else if (media.isVideo) {
                 Icon(
                     imageVector = Icons.Rounded.PlayCircle,
                     contentDescription = null,
                     tint = Color.White.copy(alpha = 0.9f),
                     modifier = Modifier
-                        .size(36.dp)
-                        .align(Alignment.Center)
+                        .size(12.dp)
+                        .align(Alignment.BottomStart)
+                        .padding(2.dp)
                 )
-                if (formattedDuration != null) {
-                    Text(
-                        text = formattedDuration,
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(8.dp)
-                    )
-                }
             }
 
             if (selectionMode) {
@@ -154,15 +155,16 @@ fun MediaItemCard(
                             else Color.Black.copy(alpha = 0.1f)
                         )
                 )
-
-                Icon(
-                    imageVector = if (isSelected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
-                    contentDescription = if (isSelected) "Selected" else "Unselected",
-                    tint = if (isSelected) MaterialTheme.colorScheme.primary else Color.White,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                )
+                if (!isTiny) {
+                    Icon(
+                        imageVector = if (isSelected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                        contentDescription = if (isSelected) "Selected" else "Unselected",
+                        tint = if (isSelected) MaterialTheme.colorScheme.primary else Color.White,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                    )
+                }
             }
         }
     }

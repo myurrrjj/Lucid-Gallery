@@ -41,4 +41,7 @@ sealed class GalleryEvent : ViewEvent {
 
     object onSearchClicked : GalleryEvent()
 
+    data class SetSearchMediaList(val results: List<MediaAsset>) : GalleryEvent()
+    object ClearSearchMediaList : GalleryEvent()
+
 }
