@@ -34,13 +34,17 @@ import androidx.compose.ui.unit.dp
 import com.example.jetpackcomposegalleryapp.domain.model.GalleryViewMode
 import com.example.jetpackcomposegalleryapp.domain.model.MediaAsset
 import com.example.jetpackcomposegalleryapp.domain.model.PersonCluster
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.ImmutableSet
+import kotlinx.collections.immutable.persistentSetOf
 
 @Composable
 fun SharedTransitionScope.PersonDetailView(
     cluster: PersonCluster,
-    groupedMedia: Map<String, List<MediaAsset>>,
+    groupedMedia: ImmutableMap<String, ImmutableList<MediaAsset>>,
     currentViewMode: GalleryViewMode,
-    selectedMediaIds: Set<Long> = emptySet(),
+    selectedMediaIds: ImmutableSet<Long> = persistentSetOf(),
     selectionMode: Boolean = false,
     onToggleSelection: (Long) -> Unit,
     onEnterSelectionMode: () -> Unit,
