@@ -65,7 +65,7 @@ class NativeThumbnailFetcher(
         override fun create(data: Uri, options: Options, imageLoader: ImageLoader): Fetcher? {
             val isThumbnail = options.parameters.value("is_thumbnail") as? Boolean ?: false
 
-            if (!isThumbnail || data.scheme != "content" && data.authority != MediaStore.AUTHORITY) {
+            if (!isThumbnail || data.scheme != "content" || data.authority != MediaStore.AUTHORITY) {
                 return null
             }
             val w = options.size.width.pxOrElse { MAX_EDGE }.coerceIn(1, MAX_EDGE)

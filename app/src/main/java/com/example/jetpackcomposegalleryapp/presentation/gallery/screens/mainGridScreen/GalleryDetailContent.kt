@@ -11,14 +11,17 @@ import com.example.jetpackcomposegalleryapp.domain.model.MediaAsset
 import com.example.jetpackcomposegalleryapp.presentation.gallery.components.AlbumDetailView
 import com.example.jetpackcomposegalleryapp.presentation.gallery.components.PersonDetailView
 import com.example.jetpackcomposegalleryapp.presentation.gallery.contract.GalleryEvent
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.ImmutableSet
 
 @Composable
 fun SharedTransitionScope.GalleryDetailContent(
     target: ScreenTarget,
     selectionMode: Boolean,
-    groupedMedia: Map<String, List<MediaAsset>>,
+    groupedMedia: ImmutableMap<String, ImmutableList<MediaAsset>>,
     currentViewMode: GalleryViewMode,
-    selectedMediaIds: Set<Long>,
+    selectedMediaIds: ImmutableSet<Long>,
     onEvent: (GalleryEvent) -> Unit,
     galleryToDetailScope: AnimatedContentScope,
     tabAnimatedVisibilityScope: AnimatedContentScope

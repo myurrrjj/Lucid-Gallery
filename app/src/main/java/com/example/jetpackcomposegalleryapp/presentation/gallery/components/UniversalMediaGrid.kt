@@ -21,14 +21,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.jetpackcomposegalleryapp.domain.model.GalleryViewMode
 import com.example.jetpackcomposegalleryapp.domain.model.MediaAsset
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.ImmutableSet
 
 @Composable
 fun UniversalMediaGrid(
-    groupedMedia: Map<String, List<MediaAsset>>,
+    groupedMedia: ImmutableMap<String, ImmutableList<MediaAsset>>,
     currentViewMode: GalleryViewMode,
     gridState: LazyGridState,
     selectionMode: Boolean,
-    selectedMediaIds: Set<Long>,
+    selectedMediaIds: ImmutableSet<Long>,
     onMediaClick: (Long) -> Unit,
     onToggleSelection: (Long) -> Unit,
     onEnterSelectionMode: () -> Unit,

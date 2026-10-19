@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -28,6 +29,8 @@ import com.example.jetpackcomposegalleryapp.presentation.gallery.components.Deta
 import com.example.jetpackcomposegalleryapp.presentation.gallery.components.DetailFloatingBar
 import com.example.jetpackcomposegalleryapp.presentation.gallery.components.FloatingGalleryBar
 import com.example.jetpackcomposegalleryapp.presentation.gallery.model.GalleryTab
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.coroutines.Job
 
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -36,9 +39,9 @@ fun SharedTransitionScope.GalleryBottomBar(
     selectionMode: Boolean,
     isMainGallery: Boolean,
     hasContent: Boolean,
-    isScrollingUp: Boolean,
-    selectedMediaIds: Set<Long>,
-    masterMediaList: List<MediaAsset>,
+    isScrollingUp:State<Boolean>,
+    selectedMediaIds: ImmutableSet<Long>,
+    masterMediaList: ImmutableList<MediaAsset>,
     selectedTab: GalleryTab,
     animatedVisibilityScope: AnimatedContentScope,
     onActionClick: (DetailAction, List<MediaAsset>) -> Unit,
@@ -46,7 +49,7 @@ fun SharedTransitionScope.GalleryBottomBar(
     onTabSelected: (GalleryTab) -> Unit
 ) {
     val shouldShowBar by remember(hasContent) {
-        derivedStateOf { !hasContent || isScrollingUp }
+        derivedStateOf { !hasContent || isScrollingUp.value }
     }
     val bottomBarVisible = selectionMode || (isMainGallery && shouldShowBar)
 
