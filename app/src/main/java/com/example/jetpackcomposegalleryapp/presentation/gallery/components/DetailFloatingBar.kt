@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
@@ -42,19 +43,29 @@ fun DetailFloatingBar(
     isFavorite: Boolean,
     onActionClick: (DetailAction) -> Unit,
     modifier: Modifier = Modifier,
-    allowedActions: List<DetailAction> = DetailAction.entries
+    allowedActions: List<DetailAction> = DetailAction.entries,
+    showContainer:Boolean = true
 ) {
-    Row(
-        modifier = modifier
-            .widthIn(max = 420.dp)
+    val containerModifier = if (showContainer) {
+        Modifier
             .shadow(
                 elevation = 24.dp,
                 shape = CircleShape,
                 spotColor = Color.Black.copy(alpha = .5f)
             )
             .background(MaterialTheme.colorScheme.surface.copy(alpha = .85f), CircleShape)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    } else {
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp)
+    }
+
+    Row(
+        modifier = modifier
+            .widthIn(max = 420.dp)
+            .then(containerModifier),
+        horizontalArrangement = if (showContainer) Arrangement.spacedBy(16.dp) else Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
         allowedActions.forEach { action ->
@@ -64,7 +75,7 @@ fun DetailFloatingBar(
                     .bouncyClick(
                         onClick = { onActionClick(action) }
                     )
-                    .padding(10.dp)
+                    .padding(if (showContainer) 10.dp else 8.dp)
             ) {
                 val displayIcon = if (action == DetailAction.FAVOURITE && isFavorite) {
                     Icons.Rounded.Favorite

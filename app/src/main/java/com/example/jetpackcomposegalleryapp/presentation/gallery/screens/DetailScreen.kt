@@ -5,16 +5,21 @@ import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,8 +40,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AspectRatio
 import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Fullscreen
@@ -105,6 +113,29 @@ import com.example.jetpackcomposegalleryapp.presentation.gallery.components.reme
 import com.example.jetpackcomposegalleryapp.presentation.gallery.components.selectTrack
 import com.example.jetpackcomposegalleryapp.presentation.gallery.contract.GalleryEvent
 import kotlinx.coroutines.delay
+
+
+import android.app.Activity
+import android.os.Build
+import android.view.View
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+
+
+fun Activity.enforceImmersiveMode(enforce: Boolean) {
+    val window = window ?: return
+    val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+
+    if (enforce) {
+        windowInsetsController.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+
+        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+    } else {
+        windowInsetsController.show(WindowInsetsCompat.Type.systemBars())
+    }
+}
 
 @Composable
 fun DetailScreen(
@@ -255,8 +286,7 @@ fun DetailScreen(
                                     animatedVisibilityScope = animatedVisibilityScope,
                                     renderInOverlayDuringTransition = true
                                 )
-                                .graphicsLayer { alpha = imageAlpha }
-                        )
+                                .graphicsLayer { alpha = imageAlpha })
                     }
                 }
             } else {
@@ -335,13 +365,12 @@ fun DetailScreen(
                                 )
                             )
                         }
-                    }, modifier = Modifier
-                        .sharedBounds(
-                            sharedContentState = rememberSharedContentState(key = "floating_navigation_bar"),
-                            animatedVisibilityScope = animatedVisibilityScope,
-                            resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
-                            zIndexInOverlay = 1f
-                        )
+                    }, modifier = Modifier.sharedBounds(
+                        sharedContentState = rememberSharedContentState(key = "floating_navigation_bar"),
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+                        zIndexInOverlay = 1f
+                    )
                 )
             }
         }
@@ -352,6 +381,9 @@ fun DetailScreen(
     }
 }
 
+private enum class OverlayPanel {
+    NONE, TRACKS, SPEED
+}
 
 @Composable
 fun VideoPlayerOverlay(
@@ -370,12 +402,18 @@ fun VideoPlayerOverlay(
 ) {
     val context = LocalContext.current
     val activity = remember { context.findActivity() }
+    DisposableEffect(Unit) {
+        activity?.enforceImmersiveMode(true)
+        onDispose {
+            activity?.enforceImmersiveMode(false)
+        }
+    }
     var isDragging by remember { mutableStateOf(false) }
     var dragProgress by remember { mutableFloatStateOf(0f) }
 
-    var showAudioMenu by remember { mutableStateOf(false) }
-    var showSubtitleMenu by remember { mutableStateOf(false) }
-    var showResizeMenu by remember { mutableStateOf(false) }
+    var activePanel by remember { mutableStateOf(OverlayPanel.NONE) }
+
+    LaunchedEffect(isVisible) { if (!isVisible) activePanel = OverlayPanel.NONE }
 
     val currentProgress = if (state.duration > 0) {
         (state.currentPosition.toFloat() / state.duration.toFloat()).coerceIn(0f, 1f)
@@ -398,14 +436,10 @@ fun VideoPlayerOverlay(
         isVisible,
         state.isPlaying,
         isDragging,
-        showAudioMenu,
-        showSubtitleMenu,
-        controlPosition,
-        showResizeMenu,
-
-        ) {
-        if (isVisible && state.isPlaying && !isDragging && !showAudioMenu && !showSubtitleMenu && !showResizeMenu
-        ) {
+        activePanel,
+        controlPosition
+    ) {
+        if (isVisible && state.isPlaying && !isDragging && activePanel == OverlayPanel.NONE) {
             delay(3000L)
             onVisibilityChanged(false)
         }
@@ -433,7 +467,9 @@ fun VideoPlayerOverlay(
                         }
                     }
                 })
-            }) {
+            }
+
+    ) {
         AnimatedVisibility(
             visible = isVisible,
             enter = if (isPagerSwiping) fadeIn(tween(150)) else fadeIn(),
@@ -460,227 +496,283 @@ fun VideoPlayerOverlay(
                             start = if (controlPosition == ControlPosition.LEFT) cutoutStart else 0.dp,
                             end = if (controlPosition == ControlPosition.RIGHT) cutoutEnd else 0.dp
                         )
-                        .widthIn(max = 420.dp)
+                        .widthIn(max = 400.dp)
                         .fillMaxWidth()
                         .padding(
                             bottom = WindowInsets.systemBars.asPaddingValues()
-                                .calculateBottomPadding(),
-                            start = 16.dp,
-                            end = 16.dp
+                                .calculateBottomPadding() + 8.dp,
+                            start = 12.dp,
+                            end = 12.dp
                         )
-                        .clip(RoundedCornerShape(28.dp))
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
-                        .padding(horizontal = 20.dp, vertical = 18.dp)
+                        .clip(RoundedCornerShape(26.dp))
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.88f))
+                        .animateContentSize(
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        )
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
                         .align(BiasAlignment(horizontalBias, verticalBias))
                 ) {
+
+                    AnimatedVisibility(
+                        visible = activePanel != OverlayPanel.NONE,
+                        enter = expandVertically() + fadeIn(tween(150)),
+                        exit = shrinkOut() + fadeOut(tween(150))
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 10.dp)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .65f))
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            when (activePanel) {
+                                OverlayPanel.TRACKS -> {
+                                    if (state.subtitleTracks.isNotEmpty()) {
+                                        Text(
+                                            text = "Subtitles",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .horizontalScroll(rememberScrollState()),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            OptionPill(
+                                                label = "Off",
+                                                selected = !subtitlesOn,
+                                                onClick = {
+                                                    disableTrackType(player, C.TRACK_TYPE_TEXT)
+                                                }
+                                            )
+                                            state.subtitleTracks.forEachIndexed { index, label ->
+                                                OptionPill(
+                                                    label = label,
+                                                    selected = index == state.selectedSubtitleTrack,
+                                                    onClick = {
+                                                        selectTrack(player, C.TRACK_TYPE_TEXT, index)
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    if (state.audioTracks.isNotEmpty()) {
+                                        Text(
+                                            text = "Audio Track",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .horizontalScroll(rememberScrollState()),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            state.audioTracks.forEachIndexed { index, label ->
+                                                OptionPill(
+                                                    label = label,
+                                                    selected = index == state.selectedAudioTrack,
+                                                    onClick = {
+                                                        selectTrack(player, C.TRACK_TYPE_AUDIO, index)
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                OverlayPanel.SPEED -> {
+                                    Text(
+                                        text = "Playback Speed",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 2.5f)
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .horizontalScroll(rememberScrollState()),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        speeds.forEach { speed ->
+                                            OptionPill(
+                                                label = "${speed}x",
+                                                selected = speed == state.playbackSpeed,
+                                                onClick = {
+                                                    player.playbackParameters = PlaybackParameters(speed)
+                                                    activePanel = OverlayPanel.NONE
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                OverlayPanel.NONE -> Unit
+                            }
+                        }
+                    }
+
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (state.audioTracks.isNotEmpty()) {
-                                Box {
-                                    PlayerControlSurface(
-                                        onClick = { showAudioMenu = true },
-                                        modifier = Modifier.size(40.dp),
-                                        contentDescription = "AudioTrack",
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Audiotrack,
-                                            contentDescription = "Audio track",
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    }
-                                    DropdownMenu(
-                                        expanded = showAudioMenu,
-                                        onDismissRequest = { showAudioMenu = false }) {
-                                        state.audioTracks.forEachIndexed { index, label ->
-                                            DropdownMenuItem(
-                                                text = { Text(text = label) },
-                                                trailingIcon = {
-                                                    if (index == state.selectedAudioTrack) {
-                                                        Icon(
-                                                            imageVector = Icons.Rounded.Check,
-                                                            contentDescription = "Selected",
-                                                            tint = MaterialTheme.colorScheme.primary
-                                                        )
-                                                    }
-                                                },
-                                                onClick = {
-                                                    selectTrack(
-                                                        player, C.TRACK_TYPE_AUDIO, index
-                                                    )
-                                                    showAudioMenu = false
-                                                })
-                                        }
-                                    }
-                                }
-                            }
-                            if (state.subtitleTracks.isNotEmpty()) {
-                                Box {
-                                    PlayerControlSurface(
-                                        onClick = { showSubtitleMenu = true },
-                                        modifier = Modifier.size(40.dp),
-                                        contentDescription = "SubtitleTrack",
-                                        containerColor = if (subtitlesOn) {
-                                            MaterialTheme.colorScheme.primaryContainer
-                                        } else {
-                                            MaterialTheme.colorScheme.surfaceVariant
-                                        }
-                                    ) {
-                                        Icon(
-                                            imageVector = if (subtitlesOn) Icons.Rounded.Subtitles else Icons.Rounded.SubtitlesOff,
-                                            contentDescription = "Subtitles",
-                                            tint = if (subtitlesOn) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    }
-                                    DropdownMenu(
-                                        expanded = showSubtitleMenu,
-                                        onDismissRequest = { showSubtitleMenu = false }) {
-                                        DropdownMenuItem(
-                                            text = { Text("Off") },
-                                            trailingIcon = {
-                                                if (!subtitlesOn) {
-                                                    Icon(
-                                                        imageVector = Icons.Rounded.Check,
-                                                        contentDescription = "Selected",
-                                                        tint = MaterialTheme.colorScheme.primary
-                                                    )
-                                                }
-                                            },
-                                            onClick = {
-                                                disableTrackType(player, C.TRACK_TYPE_TEXT)
-                                                showSubtitleMenu = false
-                                            })
-                                        state.subtitleTracks.forEachIndexed { index, label ->
-                                            DropdownMenuItem(
-                                                text = { Text(label) },
-                                                trailingIcon = {
-                                                    if (index == state.selectedSubtitleTrack) {
-                                                        Icon(
-                                                            imageVector = Icons.Rounded.Check,
-                                                            contentDescription = "Selected",
-                                                            tint = MaterialTheme.colorScheme.primary
-                                                        )
-                                                    }
-                                                },
-                                                onClick = {
-                                                    selectTrack(
-                                                        player, C.TRACK_TYPE_TEXT, index
-                                                    )
-                                                    showSubtitleMenu = false
-                                                })
-                                        }
-                                    }
-                                }
-                            }
                             PlayerControlSurface(
                                 onClick = { if (state.isPlaying) player.pause() else player.play() },
-                                modifier = Modifier.size(48.dp),
+                                modifier = Modifier.size(46.dp),
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentDescription = if (state.isPlaying) "Pause" else "Play"
                             ) {
                                 Icon(
                                     imageVector = if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                                    contentDescription = null,
+                                    contentDescription = "Play/Pause Button",
                                     tint = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.size(32.dp)
+                                    modifier = Modifier.size(28.dp)
                                 )
                             }
+
+                            val hasTracks = state.audioTracks.isNotEmpty() || state.subtitleTracks.isNotEmpty()
+                            if (hasTracks) {
+                                val isTracksMenuOpened = activePanel == OverlayPanel.TRACKS
+                                PlayerControlSurface(
+                                    onClick = {
+                                        activePanel = if (isTracksMenuOpened) OverlayPanel.NONE else OverlayPanel.TRACKS
+                                    },
+                                    modifier = Modifier.height(44.dp),
+                                    shape = RoundedCornerShape(22.dp),
+                                    containerColor = when {
+                                        isTracksMenuOpened -> MaterialTheme.colorScheme.primary
+                                        subtitlesOn -> MaterialTheme.colorScheme.primaryContainer
+                                        else -> MaterialTheme.colorScheme.surfaceVariant
+                                    },
+                                    contentDescription = "Audio & Subtitles"
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        val iconTint = when {
+                                            isTracksMenuOpened -> MaterialTheme.colorScheme.onPrimary
+                                            subtitlesOn -> MaterialTheme.colorScheme.onPrimaryContainer
+                                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                        }
+                                        if (state.subtitleTracks.isNotEmpty()) {
+                                            Icon(
+                                                imageVector = if (subtitlesOn) Icons.Rounded.Subtitles else Icons.Rounded.SubtitlesOff,
+                                                contentDescription = "Subtitles",
+                                                tint = iconTint,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        if (state.audioTracks.isNotEmpty()) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Audiotrack,
+                                                contentDescription = "Audio",
+                                                tint = iconTint,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
+
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            val isSpeedOpen = activePanel == OverlayPanel.SPEED
+
                             PlayerControlSurface(
                                 onClick = {
-                                    val newSpeed = when (state.playbackSpeed) {
-                                        1f -> 1.5f; 1.5f -> 2f; 2f -> 0.5f; else -> 1f
-                                    }
-                                    player.playbackParameters = PlaybackParameters(newSpeed)
+                                    activePanel = if (isSpeedOpen) OverlayPanel.NONE else OverlayPanel.SPEED
                                 },
                                 modifier = Modifier.height(44.dp),
                                 shape = RoundedCornerShape(22.dp),
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                containerColor = if (isSpeedOpen || state.playbackSpeed != 1f) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                },
                                 contentDescription = "Playback speed"
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    modifier = Modifier.padding(horizontal = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    val speedTint = if (isSpeedOpen || state.playbackSpeed != 1f) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
                                     Icon(
                                         imageVector = Icons.Rounded.Speed,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(18.dp)
+                                        contentDescription = "Playback Speed",
+                                        tint = speedTint,
+                                        modifier = Modifier.size(17.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
                                     Text(
                                         text = "${state.playbackSpeed}x",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = speedTint,
                                         style = MaterialTheme.typography.labelLarge,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
                             }
 
-                            Box {
-                                PlayerControlSurface(
-                                    onClick = {
-                                        showResizeMenu = true
-                                    },
-                                    modifier = Modifier.height(44.dp),
-                                    shape = RoundedCornerShape(22.dp),
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    contentDescription = "Video resize mode"
+                            PlayerControlSurface(
+                                onClick = { onResizeModeChanged(resizeMode.next()) },
+                                modifier = Modifier.height(44.dp),
+                                shape = RoundedCornerShape(22.dp),
+                                containerColor = if (resizeMode != VideoResizeMode.FIT) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                },
+                                contentDescription = "Toggle video crop mode"
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    val cropTint = if (resizeMode != VideoResizeMode.FIT) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Rounded.AspectRatio,
+                                        contentDescription = null,
+                                        tint = cropTint,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
                                     Text(
                                         text = resizeMode.buttonLabel,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = cropTint,
                                         style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 14.dp)
+                                        fontWeight = FontWeight.Bold
                                     )
                                 }
-
-                                DropdownMenu(
-                                    expanded = showResizeMenu,
-                                    onDismissRequest = {
-                                        showResizeMenu = false
-                                    }
-                                ) {
-                                    VideoResizeMode.values().forEach { option ->
-
-                                        DropdownMenuItem(
-                                            text = {
-                                                Text(text = option.menuLabel)
-                                            },
-
-                                            trailingIcon = {
-                                                if (option == resizeMode) {
-                                                    Icon(
-                                                        imageVector = Icons.Rounded.Check,
-                                                        contentDescription = "Selected",
-                                                        tint = MaterialTheme.colorScheme.primary
-                                                    )
-                                                }
-                                            },
-
-                                            onClick = {
-                                                onResizeModeChanged(option)
-                                                showResizeMenu = false
-                                            }
-                                        )
-                                    }
-                                }
                             }
+
                             PlayerControlSurface(
                                 onClick = {
                                     activity?.requestedOrientation = if (!videoIsLandscape) {
@@ -689,7 +781,7 @@ fun VideoPlayerOverlay(
                                         ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
                                     }
                                 },
-                                modifier = Modifier.size(48.dp),
+                                modifier = Modifier.size(44.dp),
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
                                 contentDescription = "Fullscreen"
                             ) {
@@ -697,38 +789,48 @@ fun VideoPlayerOverlay(
                                     imageVector = if (videoIsLandscape) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
                                     contentDescription = "Fullscreen",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
                         }
                     }
-                    Spacer(Modifier.height(10.dp))
+
+                    Spacer(Modifier.height(6.dp))
+
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = formatVideoTime(if (isDragging) (dragProgress * state.duration).toLong() else state.currentPosition),
+                            text = formatVideoTime(
+                                if (isDragging) (dragProgress * state.duration).toLong() else state.currentPosition
+                            ),
                             color = MaterialTheme.colorScheme.onSurface,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Medium
                         )
                         Slider(
-                            value = sliderValue, onValueChange = { newValue ->
+                            value = sliderValue,
+                            onValueChange = { newValue ->
                                 isDragging = true
                                 dragProgress = newValue
-                            }, onValueChangeFinished = {
+                            },
+                            onValueChangeFinished = {
                                 isDragging = false
                                 player.seekTo((dragProgress * state.duration).toLong())
-                            }, colors = SliderDefaults.colors(
+                            },
+                            colors = SliderDefaults.colors(
                                 thumbColor = MaterialTheme.colorScheme.primary,
                                 activeTrackColor = MaterialTheme.colorScheme.primary,
                                 inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                    alpha = 0.4f
+                                    alpha = 0.35f
                                 )
-                            ), modifier = Modifier.weight(1f)
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(30.dp)
                         )
                         Text(
                             text = formatVideoTime(state.duration),
@@ -737,11 +839,15 @@ fun VideoPlayerOverlay(
                             fontWeight = FontWeight.Medium
                         )
                     }
-                    Spacer(Modifier.height(10.dp))
+
+                    Spacer(Modifier.height(4.dp))
+
+
                     with(sharedTransitionScope) {
                         DetailFloatingBar(
                             isFavorite = isFavorite,
                             onActionClick = onActionClick,
+                            showContainer = false,
                             modifier = Modifier.sharedBounds(
                                 sharedContentState = rememberSharedContentState(key = "floating_navigation_bar"),
                                 animatedVisibilityScope = animatedVisibilityScope,
@@ -753,6 +859,49 @@ fun VideoPlayerOverlay(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun OptionPill(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    PlayerControlSurface(
+        onClick = onClick,
+        shape = CircleShape,
+        containerColor = if (selected) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+        },
+        modifier = Modifier.height(34.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            if (selected) {
+                Icon(
+                    imageVector = Icons.Rounded.Check,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.onPrimary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+            )
         }
     }
 }

@@ -81,7 +81,11 @@ enum class VideoResizeMode(
     STRETCH(
         buttonLabel = "Stretch",
         menuLabel = "Stretch to fill"
-    )
+    );
+    fun next(): VideoResizeMode{
+        val all = entries
+        return all[(ordinal+1)%all.size]
+    }
 }
 
 @OptIn(UnstableApi::class)
