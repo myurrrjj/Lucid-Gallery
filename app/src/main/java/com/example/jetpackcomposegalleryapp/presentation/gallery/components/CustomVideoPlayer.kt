@@ -3,6 +3,8 @@ package com.example.jetpackcomposegalleryapp.presentation.gallery.components
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.annotation.OptIn
@@ -13,6 +15,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fitInside
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -21,8 +24,10 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,9 +45,13 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.example.jetpackcomposegalleryapp.R
 import com.example.jetpackcomposegalleryapp.core.presentation.components.bouncyClick
 import com.example.jetpackcomposegalleryapp.domain.model.MediaAsset
+import com.example.jetpackcomposegalleryapp.presentation.gallery.components.subtitles.SubtitleOverlay
+import com.example.jetpackcomposegalleryapp.presentation.gallery.components.subtitles.rememberSubtitleState
 import com.example.jetpackcomposegalleryapp.presentation.gallery.screens.VideoPlayerOverlay
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -55,6 +64,39 @@ fun Context.findActivity(): Activity? = when (this) {
 
 enum class ControlPosition {
     BOTTOM, LEFT, RIGHT
+}
+
+enum class VideoResizeMode(
+    val buttonLabel: String,
+    val menuLabel: String
+) {
+    FIT(
+        buttonLabel = "Fit",
+        menuLabel = "Fit screen"
+    ),
+    CROP(
+        buttonLabel = "Crop",
+        menuLabel = "Fill screen (crop)"
+    ),
+    STRETCH(
+        buttonLabel = "Stretch",
+        menuLabel = "Stretch to fill"
+    )
+}
+
+@OptIn(UnstableApi::class)
+private fun VideoResizeMode.toMedia3ResizeMode(): Int {
+    return when (this) {
+        VideoResizeMode.FIT ->
+            AspectRatioFrameLayout.RESIZE_MODE_FIT
+
+        VideoResizeMode.CROP ->
+            AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+
+        VideoResizeMode.STRETCH ->
+            AspectRatioFrameLayout.RESIZE_MODE_FILL
+
+    }
 }
 
 data class MediaControlAlignment(
@@ -97,22 +139,20 @@ fun rememberVideoPlayerState(player: ExoPlayer): State<VideoPlayerState> {
                 val audioGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
                 val subtitleGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
 
-                state.value = state.value.copy(
-                    audioTracks = audioGroups.mapIndexed { index, group ->
+                state.value =
+                    state.value.copy(
+                        audioTracks = audioGroups.mapIndexed { index, group ->
                         trackLabel(
-                            group,
-                            index
+                            group, index
                         )
                     },
-                    subtitleTracks = subtitleGroups.mapIndexed { index, group ->
-                        trackLabel(
-                            group,
-                            index
-                        )
-                    },
-                    selectedAudioTrack = audioGroups.indexOfFirst { it.isSelected },
-                    selectedSubtitleTrack = subtitleGroups.indexOfFirst { it.isSelected }
-                )
+                        subtitleTracks = subtitleGroups.mapIndexed { index, group ->
+                            trackLabel(
+                                group, index
+                            )
+                        },
+                        selectedAudioTrack = audioGroups.indexOfFirst { it.isSelected },
+                        selectedSubtitleTrack = subtitleGroups.indexOfFirst { it.isSelected })
             }
 
             override fun onEvents(player: Player, events: Player.Events) {
@@ -162,8 +202,7 @@ fun PlayerControlSurface(
         modifier = modifier
             .clip(shape)
             .background(containerColor)
-            .bouncyClick(onClick = { onClick() }),
-        contentAlignment = Alignment.Center
+            .bouncyClick(onClick = { onClick() }), contentAlignment = Alignment.Center
     ) {
         content()
     }
@@ -179,18 +218,17 @@ fun formatVideoTime(timeMs: Long): String {
 fun selectTrack(player: ExoPlayer, trackType: Int, index: Int) {
     val trackGroups = player.currentTracks.groups.filter { it.type == trackType }
     if (index in trackGroups.indices) {
-        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-            .setTrackTypeDisabled(trackType, false)
-            .setOverrideForType(TrackSelectionOverride(trackGroups[index].mediaTrackGroup, 0))
-            .build()
+        player.trackSelectionParameters =
+            player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(trackType, false)
+                .setOverrideForType(TrackSelectionOverride(trackGroups[index].mediaTrackGroup, 0))
+                .build()
     }
 }
 
 fun disableTrackType(player: ExoPlayer, trackType: Int) {
-    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-        .setTrackTypeDisabled(trackType, true)
-        .clearOverridesOfType(trackType)
-        .build()
+    player.trackSelectionParameters =
+        player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(trackType, true)
+            .clearOverridesOfType(trackType).build()
 }
 
 @OptIn(UnstableApi::class)
@@ -200,6 +238,8 @@ fun CustomVideoPlayer(
     animatedVisibilityScope: AnimatedVisibilityScope,
     isCurrentPage: Boolean,
     exoPlayer: ExoPlayer,
+    resizeMode: VideoResizeMode,
+    onResizeModeChanged: (VideoResizeMode) -> Unit,
     isVisible: Boolean,
     videoState: VideoPlayerState,
     onVisibilityChanged: (Boolean) -> Unit,
@@ -208,12 +248,14 @@ fun CustomVideoPlayer(
     sharedTransitionScope: SharedTransitionScope,
     isFavorite: Boolean,
     onActionClick: (DetailAction) -> Unit,
-    // FIX: was 7 separate params (controlPosition, onControlPositionChanged, horizontalBias,
-    // FIX: verticalBias, cutoutStart, cutoutEnd, videoIsLandscape, isPagerSwiping), now 1
     mediaControlAlignment: MediaControlAlignment
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
-
+    val targetResizeMode = resizeMode.toMedia3ResizeMode()
+    val subtitleState = rememberSubtitleState(exoPlayer)
+    var subtitlePosition by remember {
+        mutableFloatStateOf(.85f)
+    }
     LaunchedEffect(isCurrentPage, media, autoPlay) {
         if (isCurrentPage) {
             val mediaItem = MediaItem.fromUri(media.uriString)
@@ -245,34 +287,59 @@ fun CustomVideoPlayer(
             .background(MaterialTheme.colorScheme.background)
     ) {
         val themeBackgroundColor = MaterialTheme.colorScheme.background.toArgb()
-        AndroidView(
-            modifier = Modifier.matchParentSize(),
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    useController = false
-                    useArtwork = false
-                    layoutParams = FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                    setBackgroundColor(themeBackgroundColor)
+        AndroidView(modifier = Modifier.matchParentSize(), factory = { ctx ->
+            (
+                    LayoutInflater.from(ctx)
+                        .inflate(
+                            R.layout.player_view_texture,
+                            null,
+                            false
+                        ) as PlayerView
+                    ).apply {
+                useController = false
+                useArtwork = false
+                subtitleView?.visibility = View.GONE
+
+                layoutParams = FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                setBackgroundColor(themeBackgroundColor)
+                    setResizeMode(targetResizeMode)
+
+
+
                 }
-            },
-            update = { playerView ->
-                if (isCurrentPage) {
-                    playerView.player = exoPlayer
-                    playerView.setBackgroundColor(themeBackgroundColor)
-                } else {
-                    playerView.player = null
-                }
+        }, update = { playerView ->
+
+            if (playerView.getResizeMode() != targetResizeMode) {
+                playerView.setResizeMode(targetResizeMode)
             }
-        )
+
+            if (isCurrentPage) {
+                playerView.player = exoPlayer
+                playerView.subtitleView?.visibility = View.GONE
+                playerView.setBackgroundColor(themeBackgroundColor)
+            } else {
+                playerView.player = null
+            }
+        })
 
         if (isCurrentPage) {
+            SubtitleOverlay(
+                state = subtitleState.value,
+                verticalPosition = subtitlePosition,
+                modifier = Modifier.matchParentSize()
+            )
+        }
+
+        if (isCurrentPage) {
+
             VideoPlayerOverlay(
                 player = exoPlayer,
                 state = videoState,
                 isVisible = isVisible,
+                resizeMode = resizeMode,
+                onResizeModeChanged = onResizeModeChanged,
                 onVisibilityChanged = onVisibilityChanged,
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,

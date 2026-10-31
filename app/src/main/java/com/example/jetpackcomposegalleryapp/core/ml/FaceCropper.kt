@@ -11,16 +11,7 @@ import kotlin.math.sqrt
 
 object FaceCropper {
 
-    /*
-     * Standard ArcFace 112x112 landmark positions.
-     *
-     * Order:
-     * 1. left eye
-     * 2. right eye
-     * 3. nose
-     * 4. left mouth
-     * 5. right mouth
-     */
+
     private val ARC_FACE_TEMPLATE = arrayOf(
         floatArrayOf(38.2946f, 51.6963f),
         floatArrayOf(73.5318f, 51.5014f),
@@ -35,21 +26,14 @@ object FaceCropper {
         margin: Float = 0.2f
     ): Bitmap? {
 
-        /*
-         * First choice:
-         * Align using ML Kit's five facial landmarks.
-         */
+
         val aligned = alignFace(originalBitmap, face)
 
         if (aligned != null) {
             return aligned
         }
 
-        /*
-         * Fallback:
-         * If ML Kit did not provide all five landmarks,
-         * use the previous bounding-box crop.
-         */
+
         return cropFaceByBoundingBox(
             originalBitmap = originalBitmap,
             face = face,
@@ -77,9 +61,7 @@ object FaceCropper {
         val rightMouth =
             face.getLandmark(FaceLandmark.MOUTH_RIGHT)?.position
 
-        /*
-         * We need all five landmarks for proper alignment.
-         */
+
         if (
             leftEye == null ||
             rightEye == null ||
@@ -130,14 +112,7 @@ object FaceCropper {
         }
     }
 
-    /**
-     * Calculates the best 2D similarity transform:
-     *
-     * x' = a*x - b*y + tx
-     * y' = b*x + a*y + ty
-     *
-     * using all five landmarks.
-     */
+
     private fun calculateSimilarityTransform(
         sourcePoints: Array<FloatArray>,
         targetPoints: Array<FloatArray>
@@ -199,13 +174,7 @@ object FaceCropper {
         val translationY =
             targetCenterY - (b * sourceCenterX + a * sourceCenterY)
 
-        /*
-         * Android Matrix:
-         *
-         * [ a  -b  tx ]
-         * [ b   a  ty ]
-         * [ 0   0   1  ]
-         */
+
         return Matrix().apply {
             setValues(
                 floatArrayOf(

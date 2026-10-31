@@ -62,6 +62,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
@@ -87,7 +88,6 @@ import androidx.media3.exoplayer.ExoPlayer
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.jetpackcomposegalleryapp.presentation.gallery.GalleryViewModel
-import com.example.jetpackcomposegalleryapp.presentation.gallery.contract.GalleryEvent
 import com.example.jetpackcomposegalleryapp.presentation.gallery.components.ControlPosition
 import com.example.jetpackcomposegalleryapp.presentation.gallery.components.CustomVideoPlayer
 import com.example.jetpackcomposegalleryapp.presentation.gallery.components.DetailAction
@@ -96,12 +96,14 @@ import com.example.jetpackcomposegalleryapp.presentation.gallery.components.Medi
 import com.example.jetpackcomposegalleryapp.presentation.gallery.components.MediaInfoSheet
 import com.example.jetpackcomposegalleryapp.presentation.gallery.components.PlayerControlSurface
 import com.example.jetpackcomposegalleryapp.presentation.gallery.components.VideoPlayerState
+import com.example.jetpackcomposegalleryapp.presentation.gallery.components.VideoResizeMode
 import com.example.jetpackcomposegalleryapp.presentation.gallery.components.ZoomableImage
 import com.example.jetpackcomposegalleryapp.presentation.gallery.components.disableTrackType
 import com.example.jetpackcomposegalleryapp.presentation.gallery.components.findActivity
 import com.example.jetpackcomposegalleryapp.presentation.gallery.components.formatVideoTime
 import com.example.jetpackcomposegalleryapp.presentation.gallery.components.rememberVideoPlayerState
 import com.example.jetpackcomposegalleryapp.presentation.gallery.components.selectTrack
+import com.example.jetpackcomposegalleryapp.presentation.gallery.contract.GalleryEvent
 import kotlinx.coroutines.delay
 
 @Composable
@@ -117,6 +119,9 @@ fun DetailScreen(
     val configState = state.configState
     val infoSheetState = state.infoSheetState
     var isUiVisible by remember { mutableStateOf(true) }
+    var videoResizeMode by rememberSaveable {
+        mutableStateOf(VideoResizeMode.FIT)
+    }
     val context = LocalContext.current
     val initialIndex = remember(initialMediaId, contentState.displayedMediaList) {
         contentState.displayedMediaList.indexOfFirst { it.id == initialMediaId }.coerceAtLeast(0)
@@ -211,6 +216,11 @@ fun DetailScreen(
                                 isCurrentPage = isCurrentPage,
                                 exoPlayer = exoPlayer,
                                 isVisible = isUiVisible,
+                                resizeMode = videoResizeMode,
+
+                                onResizeModeChanged = { newMode ->
+                                    videoResizeMode = newMode
+                                },
                                 videoState = videoState.value,
                                 onVisibilityChanged = { isUiVisible = it },
                                 autoPlay = configState.autoPlayVideo,
@@ -303,8 +313,10 @@ fun DetailScreen(
         with(sharedTransitionScope) {
             AnimatedVisibility(
                 visible = isUiVisible && currentMedia?.isVideo != true,
-                enter = if (isPagerSwiping) fadeIn(tween(150)) else fadeIn() + slideInVertically(initialOffsetY = { it }),
-                exit = if (isPagerSwiping) fadeOut(tween(150)) else fadeOut() + slideOutVertically(targetOffsetY = { it }),
+                enter = if (isPagerSwiping) fadeIn(tween(150)) else fadeIn() + slideInVertically(
+                    initialOffsetY = { it }),
+                exit = if (isPagerSwiping) fadeOut(tween(150)) else fadeOut() + slideOutVertically(
+                    targetOffsetY = { it }),
                 modifier = Modifier
                     .align(BiasAlignment(horizontalBias, verticalBias))
                     .padding(
@@ -346,6 +358,8 @@ fun VideoPlayerOverlay(
     player: ExoPlayer,
     state: VideoPlayerState,
     isVisible: Boolean,
+    resizeMode: VideoResizeMode,
+    onResizeModeChanged: (VideoResizeMode) -> Unit,
     onVisibilityChanged: (Boolean) -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
@@ -361,6 +375,7 @@ fun VideoPlayerOverlay(
 
     var showAudioMenu by remember { mutableStateOf(false) }
     var showSubtitleMenu by remember { mutableStateOf(false) }
+    var showResizeMenu by remember { mutableStateOf(false) }
 
     val currentProgress = if (state.duration > 0) {
         (state.currentPosition.toFloat() / state.duration.toFloat()).coerceIn(0f, 1f)
@@ -380,9 +395,17 @@ fun VideoPlayerOverlay(
     val isPagerSwiping = mediaControlAlignment.isPagerSwiping
 
     LaunchedEffect(
-        isVisible, state.isPlaying, isDragging, showAudioMenu, showSubtitleMenu, controlPosition
-    ) {
-        if (isVisible && state.isPlaying && !isDragging && !showAudioMenu && !showSubtitleMenu) {
+        isVisible,
+        state.isPlaying,
+        isDragging,
+        showAudioMenu,
+        showSubtitleMenu,
+        controlPosition,
+        showResizeMenu,
+
+        ) {
+        if (isVisible && state.isPlaying && !isDragging && !showAudioMenu && !showSubtitleMenu && !showResizeMenu
+        ) {
             delay(3000L)
             onVisibilityChanged(false)
         }
@@ -426,7 +449,7 @@ fun VideoPlayerOverlay(
                                 Color.Black.copy(alpha = 0.4f),
                                 Color.Transparent,
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.85f)
+                                Color.Black.copy(alpha = 0.7f)
                             )
                         )
                     )
@@ -440,7 +463,8 @@ fun VideoPlayerOverlay(
                         .widthIn(max = 420.dp)
                         .fillMaxWidth()
                         .padding(
-                            bottom = WindowInsets.systemBars.asPaddingValues().calculateBottomPadding(),
+                            bottom = WindowInsets.systemBars.asPaddingValues()
+                                .calculateBottomPadding(),
                             start = 16.dp,
                             end = 16.dp
                         )
@@ -462,7 +486,7 @@ fun VideoPlayerOverlay(
                                 Box {
                                     PlayerControlSurface(
                                         onClick = { showAudioMenu = true },
-                                        modifier = Modifier.size(48.dp),
+                                        modifier = Modifier.size(40.dp),
                                         contentDescription = "AudioTrack",
                                         containerColor = MaterialTheme.colorScheme.surfaceVariant
                                     ) {
@@ -502,7 +526,7 @@ fun VideoPlayerOverlay(
                                 Box {
                                     PlayerControlSurface(
                                         onClick = { showSubtitleMenu = true },
-                                        modifier = Modifier.size(48.dp),
+                                        modifier = Modifier.size(40.dp),
                                         contentDescription = "SubtitleTrack",
                                         containerColor = if (subtitlesOn) {
                                             MaterialTheme.colorScheme.primaryContainer
@@ -559,7 +583,7 @@ fun VideoPlayerOverlay(
                             }
                             PlayerControlSurface(
                                 onClick = { if (state.isPlaying) player.pause() else player.play() },
-                                modifier = Modifier.size(56.dp),
+                                modifier = Modifier.size(48.dp),
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentDescription = if (state.isPlaying) "Pause" else "Play"
                             ) {
@@ -606,6 +630,57 @@ fun VideoPlayerOverlay(
                                     )
                                 }
                             }
+
+                            Box {
+                                PlayerControlSurface(
+                                    onClick = {
+                                        showResizeMenu = true
+                                    },
+                                    modifier = Modifier.height(44.dp),
+                                    shape = RoundedCornerShape(22.dp),
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    contentDescription = "Video resize mode"
+                                ) {
+                                    Text(
+                                        text = resizeMode.buttonLabel,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 14.dp)
+                                    )
+                                }
+
+                                DropdownMenu(
+                                    expanded = showResizeMenu,
+                                    onDismissRequest = {
+                                        showResizeMenu = false
+                                    }
+                                ) {
+                                    VideoResizeMode.values().forEach { option ->
+
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(text = option.menuLabel)
+                                            },
+
+                                            trailingIcon = {
+                                                if (option == resizeMode) {
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.Check,
+                                                        contentDescription = "Selected",
+                                                        tint = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                            },
+
+                                            onClick = {
+                                                onResizeModeChanged(option)
+                                                showResizeMenu = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                             PlayerControlSurface(
                                 onClick = {
                                     activity?.requestedOrientation = if (!videoIsLandscape) {
@@ -627,7 +702,7 @@ fun VideoPlayerOverlay(
                             }
                         }
                     }
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(10.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -662,7 +737,7 @@ fun VideoPlayerOverlay(
                             fontWeight = FontWeight.Medium
                         )
                     }
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(10.dp))
                     with(sharedTransitionScope) {
                         DetailFloatingBar(
                             isFavorite = isFavorite,
@@ -672,7 +747,8 @@ fun VideoPlayerOverlay(
                                 animatedVisibilityScope = animatedVisibilityScope,
                                 resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
                                 zIndexInOverlay = 1f
-                            )
+                            ),
+                            allowedActions = DetailAction.entries.filter { it != DetailAction.COPY }
                         )
                     }
                 }
