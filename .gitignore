@@ -23,11 +23,12 @@ person_b
 .gradle/
 
 .kotlin/
-
+sface_embedder_fp32.tflite
 captures/
 __pycache__/
 *.pyc
 *.perfetto-trace
 *benchmarkData.json
 benchmark-results/
-gallery_macrobenchmark_tracker.xlsx
+gallery_macrobenchmark_tracker.xlsx.idea/
+/gallery_macrobenchmark_tracker.xlsx

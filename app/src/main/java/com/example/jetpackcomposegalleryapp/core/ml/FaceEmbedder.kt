@@ -17,11 +17,10 @@ class FaceEmbedder @Inject constructor(
 
     private var interpreter: Interpreter? = null
 
-    private val modelFileName = "model.tflite"
+    private val modelFileName = "sface_embedder_fp32.tflite"
+    private val outputShape = intArrayOf(1, 128)
 
-    private val outputShape = intArrayOf(1, 512)
-
-    private val numThreads: Int = 1
+    private val numThreads: Int = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)
 
     init {
         loadModel()
@@ -86,6 +85,15 @@ class FaceEmbedder @Inject constructor(
                 )
 
             interpreter?.allocateTensors()
+            interpreter?.let { i->
+                val inShape = i.getInputTensor(0).shape()
+                val outShape = i.getOutputTensor(0).shape()
+                require(inShape.contentEquals(intArrayOf(1, 112, 112, 3))) {
+                    "Unexpected input shape: ${inShape.toList()}"
+                }
+                require(outShape.contentEquals(intArrayOf(1, 128))) {
+                    "Unexpected output shape: ${outShape.toList()}"
+                }            }
 
         } catch (e: Exception) {
             e.printStackTrace()
@@ -169,22 +177,9 @@ class FaceEmbedder @Inject constructor(
             val b =
                 pixelValue and 0xFF
 
-            /*
-             * Keep the exact same normalization
-             * as before. We are NOT changing preprocessing
-             * in this experiment.
-             */
-            imgData.putFloat(
-                (r - 127.5f) / 128.0f
-            )
-
-            imgData.putFloat(
-                (g - 127.5f) / 128.0f
-            )
-
-            imgData.putFloat(
-                (b - 127.5f) / 128.0f
-            )
+            imgData.putFloat(b.toFloat())
+            imgData.putFloat(g.toFloat())
+            imgData.putFloat(r.toFloat())
         }
 
         imgData.rewind()

@@ -29,7 +29,8 @@ android {
     }
     androidResources{
         noCompress+="tflite"
-        ignoreAssetsPatterns.add("!*.tflite")
+        ignoreAssetsPatterns.add("!model.tflite")
+
 
     }
 
