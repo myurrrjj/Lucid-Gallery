@@ -7,9 +7,11 @@
 /.idea/workspace.xml
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
+
 .DS_Store
 /build
 /captures
+.benchmark-results/
 .externalNativeBuild
 .cxx
 local.properties
@@ -17,3 +19,14 @@ model.tflite
 a1.jpg
 person_a
 person_b
+.gradle/
+.idea/
+.kotlin/
+
+captures/
+__pycache__/
+*.pyc
+*.perfetto-trace
+*benchmarkData.json
+benchmark-results/
+gallery_macrobenchmark_tracker.xlsx

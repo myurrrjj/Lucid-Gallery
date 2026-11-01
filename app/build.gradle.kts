@@ -1,16 +1,14 @@
 import org.gradle.kotlin.dsl.androidTestImplementation
 import org.gradle.kotlin.dsl.testImplementation
-import org.jetbrains.kotlin.resolve.sam.SamConstructorDescriptorKindExclude.excludes
 
 plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
-    id("com.google.dagger.hilt.android")
-    id("org.jetbrains.kotlin.plugin.compose")
-    id("org.jetbrains.kotlin.plugin.serialization")
-    id("com.google.devtools.ksp")
-    id("kotlin-parcelize")
-
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.hilt.android)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.kotlin.parcelize)
 }
 
 android {
@@ -31,6 +29,8 @@ android {
     }
     androidResources{
         noCompress+="tflite"
+        ignoreAssetsPatterns.add("!*.tflite")
+
     }
 
     buildTypes {
@@ -47,6 +47,13 @@ android {
         debug {
             applicationIdSuffix = ".debug"
         }
+        create("benchmark") {
+            initWith(buildTypes.getByName("release"))
+            applicationIdSuffix = ".testRelease"
+
+            matchingFallbacks += listOf("release")
+            isDebuggable = false
+        }
     }
     composeCompiler {
         reportsDestination = layout.buildDirectory.dir("compose_compiler")
@@ -60,8 +67,12 @@ android {
     buildFeatures {
         compose = true
     }
-    kotlinOptions{
-        jvmTarget = "17"
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(
+                org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+            )
+        }
     }
     lint {
         disable.add("NullSafeMutableLiveData")
@@ -102,15 +113,15 @@ dependencies {
     implementation("com.github.haifengl:smile-core:3.0.2")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
-    val room_version = "2.6.1"
+    val room_version = "2.8.5"
     implementation("androidx.room:room-runtime:$room_version")
     implementation("androidx.room:room-ktx:$room_version")
     ksp("androidx.room:room-compiler:$room_version")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
-    androidTestImplementation(" androidx.test.espresso:espresso-core:3.5.1")
+    androidTestImplementation(libs.espresso.core)
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
-    implementation("com.google.dagger:hilt-android:2.51.1")
-    ksp("com.google.dagger:hilt-compiler:2.51.1")
+    implementation("com.google.dagger:hilt-android:2.57.2")
+    ksp("com.google.dagger:hilt-compiler:2.57.2")
     ksp("androidx.hilt:hilt-compiler:1.2.0")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
     implementation(platform("androidx.compose:compose-bom:2026.03.01"))

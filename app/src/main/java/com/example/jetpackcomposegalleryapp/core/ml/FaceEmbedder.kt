@@ -21,13 +21,6 @@ class FaceEmbedder @Inject constructor(
 
     private val outputShape = intArrayOf(1, 512)
 
-    /*
-     * CPU-only inference for deterministic testing.
-     *
-     * We intentionally use ONE thread here.
-     * Once the pipeline is proven stable, we can benchmark
-     * multi-threaded CPU inference again.
-     */
     private val numThreads: Int = 1
 
     init {

@@ -1,0 +1,12 @@
+/results/
+build/
+captures/
+*.perfetto-trace
+*benchmarkData.json
+connected_android_test_additional_output/
+additional_test_output/
+benchmark-results/
+*.hprof
+
+
+
