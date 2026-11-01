@@ -7,6 +7,7 @@
 /.idea/workspace.xml
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
+.idea/
 
 .DS_Store
 /build
@@ -20,7 +21,7 @@ a1.jpg
 person_a
 person_b
 .gradle/
-.idea/
+
 .kotlin/
 
 captures/
