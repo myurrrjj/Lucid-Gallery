@@ -1,5 +1,0 @@
-package com.example.jetpackcomposegalleryapp.core.presentation.mvi
-
-interface ViewState
-interface ViewEvent
-interface ViewSideEffect

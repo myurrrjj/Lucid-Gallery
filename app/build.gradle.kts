@@ -12,16 +12,16 @@ plugins {
 }
 
 android {
-    namespace = "com.example.jetpackcomposegalleryapp"
-    compileSdk =36
+    namespace = "com.myurrrjj.chronicle"
+    compileSdk =37
 
 //    aaptOptions {
 //        ignoreAssetsPattern = "!model.tflite"
 //    }
     defaultConfig {
-        applicationId = "com.example.jetpackcomposegalleryapp"
-        minSdk = 28
-        targetSdk = 36
+        applicationId = "com.myurrrjj.chronicle"
+        minSdk = 26
+        targetSdk = 37
         versionCode = 1
         versionName = "1.0"
 
@@ -30,6 +30,8 @@ android {
     androidResources{
         noCompress+="tflite"
         ignoreAssetsPatterns.add("!model.tflite")
+        ignoreAssetsPatterns.add("!<dir>person_a")
+        ignoreAssetsPatterns.add("!<dir>person_b")
 
 
     }
