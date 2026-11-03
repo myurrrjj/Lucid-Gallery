@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.jetpackcomposegalleryapp.benchmark"
+    namespace = "com.myurrrjj.chronicle.benchmark"
     compileSdk = 36
     targetProjectPath = ":app"
     experimentalProperties["android.experimental.self-instrumenting"] = true
