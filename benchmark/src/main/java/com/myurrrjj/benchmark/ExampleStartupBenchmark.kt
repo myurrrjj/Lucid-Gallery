@@ -27,7 +27,7 @@ class ExampleStartupBenchmark {
 
     @Test
     fun startup() = benchmarkRule.measureRepeated(
-        packageName = "com.example.jetpackcomposegalleryapp.testRelease",
+        packageName = "com.myurrrjj.chronicle.testRelease",
         metrics = listOf(StartupTimingMetric()),
         iterations = 5,
         startupMode = StartupMode.COLD
