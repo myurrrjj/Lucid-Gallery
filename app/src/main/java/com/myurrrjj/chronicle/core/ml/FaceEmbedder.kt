@@ -1,0 +1,194 @@
+package com.myurrrjj.chronicle.core.ml
+
+import android.content.Context
+import android.graphics.Bitmap
+import dagger.hilt.android.qualifiers.ApplicationContext
+import org.tensorflow.lite.Interpreter
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.channels.FileChannel
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class FaceEmbedder @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
+
+    private var interpreter: Interpreter? = null
+
+    private val modelFileName = "sface_embedder_fp32.tflite"
+    private val outputShape = intArrayOf(1, 128)
+
+    private val numThreads: Int = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)
+
+    init {
+        loadModel()
+    }
+
+    private fun loadModelFile(
+        context: Context,
+        modelFileName: String
+    ): ByteBuffer {
+
+        val assetFileDescriptor =
+            context.assets.openFd(modelFileName)
+
+        val inputStream =
+            assetFileDescriptor.createInputStream()
+
+        val fileChannel =
+            inputStream.channel
+
+        val startOffset =
+            assetFileDescriptor.startOffset
+
+        val declaredLength =
+            assetFileDescriptor.declaredLength
+
+        val mappedBuffer =
+            fileChannel.map(
+                FileChannel.MapMode.READ_ONLY,
+                startOffset,
+                declaredLength
+            )
+
+        inputStream.close()
+
+        return mappedBuffer
+    }
+
+    private fun loadModel() {
+        try {
+
+            val modelBuffer =
+                loadModelFile(
+                    context,
+                    modelFileName
+                )
+
+            val options =
+                Interpreter.Options()
+
+            /*
+             * IMPORTANT:
+             * No GPU delegate.
+             *
+             * The model now runs entirely on CPU.
+             */
+            options.setNumThreads(numThreads)
+
+            interpreter =
+                Interpreter(
+                    modelBuffer,
+                    options
+                )
+
+            interpreter?.allocateTensors()
+            interpreter?.let { i->
+                val inShape = i.getInputTensor(0).shape()
+                val outShape = i.getOutputTensor(0).shape()
+                require(inShape.contentEquals(intArrayOf(1, 112, 112, 3))) {
+                    "Unexpected input shape: ${inShape.toList()}"
+                }
+                require(outShape.contentEquals(intArrayOf(1, 128))) {
+                    "Unexpected output shape: ${outShape.toList()}"
+                }            }
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun generateEmbedding(
+        preprocessedFace: Bitmap
+    ): FloatArray? {
+
+        val currentInterpreter =
+            interpreter ?: return null
+
+        val inputBuffer =
+            bitmapToFloatBuffer(
+                preprocessedFace
+            )
+
+        val outputBuffer =
+            Array(1) {
+                FloatArray(
+                    outputShape[1]
+                )
+            }
+
+        currentInterpreter.run(
+            inputBuffer,
+            outputBuffer
+        )
+
+        return outputBuffer[0]
+    }
+
+    private fun bitmapToFloatBuffer(
+        bitmap: Bitmap
+    ): ByteBuffer {
+
+        val width = 112
+        val height = 112
+
+        val bytesPerFloat = 4
+
+        val bufferSize =
+            width *
+                    height *
+                    3 *
+                    bytesPerFloat
+
+        val imgData =
+            ByteBuffer.allocateDirect(
+                bufferSize
+            )
+
+        imgData.order(
+            ByteOrder.nativeOrder()
+        )
+
+        val intValues =
+            IntArray(
+                width * height
+            )
+
+        bitmap.getPixels(
+            intValues,
+            0,
+            width,
+            0,
+            0,
+            width,
+            height
+        )
+
+        for (pixelValue in intValues) {
+
+            val r =
+                (pixelValue shr 16) and 0xFF
+
+            val g =
+                (pixelValue shr 8) and 0xFF
+
+            val b =
+                pixelValue and 0xFF
+
+            imgData.putFloat(b.toFloat())
+            imgData.putFloat(g.toFloat())
+            imgData.putFloat(r.toFloat())
+        }
+
+        imgData.rewind()
+
+        return imgData
+    }
+
+    fun close() {
+        interpreter?.close()
+        interpreter = null
+    }
+}
