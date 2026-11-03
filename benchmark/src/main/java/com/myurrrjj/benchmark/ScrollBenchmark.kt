@@ -18,7 +18,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-private const val TARGET_PACKAGE = "com.example.jetpackcomposegalleryapp.testRelease"
+private const val TARGET_PACKAGE = "com.myurrrjj.chronicle.testRelease"
 private const val TAG = "GalleryBenchmark"
 
 private const val FIND_TIMEOUT_MS = 5_000L
