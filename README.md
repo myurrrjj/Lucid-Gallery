@@ -1,132 +1,378 @@
 <div align="center">
 
-# 🖼️ Jetpack Compose Gallery App
+# Chronicle
 
-**A blazing-fast, modern, and intelligent local media gallery built entirely with Jetpack Compose.**
+**A private, fast photo and video gallery for Android, built entirely in Jetpack Compose.**
 
-[![Kotlin](https://img.shields.io/badge/Kotlin-1.9+-blue.svg?logo=kotlin)](https://kotlinlang.org)
-[![Jetpack Compose](https://img.shields.io/badge/Compose-Material%203-4285F4?logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
-[![Hilt](https://img.shields.io/badge/Dagger%20Hilt-DI-success.svg)](https://dagger.dev/hilt/)
-[![Room](https://img.shields.io/badge/Room-Database-lightgrey.svg)](https://developer.android.com/training/data-storage/room)
-[![TensorFlow Lite](https://img.shields.io/badge/TFLite-On--Device%20ML-FF6F00?logo=tensorflow)](https://www.tensorflow.org/lite)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![Jetpack Compose](https://img.shields.io/badge/Compose-Material%203-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
+[![Hilt](https://img.shields.io/badge/Dagger%20Hilt-DI-success)](https://dagger.dev/hilt/)
+[![Room](https://img.shields.io/badge/Room-SQLite-lightgrey)](https://developer.android.com/training/data-storage/room)
+[![TensorFlow Lite](https://img.shields.io/badge/TFLite-on--device-FF6F00?logo=tensorflow&logoColor=white)](https://www.tensorflow.org/lite)
+[![ML Kit](https://img.shields.io/badge/ML%20Kit-Face%20Detection-34A853)](https://developers.google.com/ml-kit)
 
-[Features](#-features) • [Tech Stack](#-tech-stack) • [Architecture](#-architecture) • [Getting Started](#-getting-started) 
+Browse, play, organise, search, and find people in your library. Everything runs on the device. No accounts, no uploads, no network calls.
 
 </div>
 
 ---
 
-## 📖 Overview
+## Overview
 
-A fully featured native Android Gallery application designed for performance and aesthetics. It leverages the latest Android development standards to provide a seamless media viewing experience. The app intelligently organizes your photos and videos, offers smooth shared element transitions, and even features on-device machine learning for background face indexing and clustering.
+Chronicle is a full local gallery: your photos and videos, grouped the way you actually think about them, wrapped in an interface that moves well and gets out of the way.
 
----
+It is built on a strict MVI architecture with a single source of truth per screen, and the ML work is treated as a first class citizen rather than a bolt-on. Face indexing has real progress, real pause and resume, and survives app kills and reboots.
 
-## ✨ Features
-
-### 🎨 Beautiful & Fluid UI
-* **Material 3 Design:** Built fully on Compose with Material 3 components, dynamic theming, and an immersive edge-to-edge experience.
-* **Shared Element Transitions:** Buttery smooth animations when navigating from the grid to the detail view using Compose's Experimental `SharedTransitionScope`.
-* **Pinch-to-Zoom Grid:** Custom gesture detection allowing users to fluidly zoom in and out to switch between **Day, Month, and Year** grouping modes.
-* **Contextual Action Bars:** Smart floating navigation and contextual selection bars that appear naturally based on scroll state and user intent.
-* **Subsampling Scale Image View:** Deep, high-resolution zoom capabilities for large images without memory overhead.
-
-### 🧠 Smart & Intelligent (On-Device ML)
-* **Face Detection & Clustering:** Uses Google ML Kit to detect faces and a custom TensorFlow Lite model (`face_embedder.tflite`) to generate embeddings.
-* **Background Processing:** Heavy ML lifting is offloaded to `WorkManager` (`FaceIndexingWorker`), ensuring the UI remains perfectly responsive while your library is indexed.
-
-### 📼 Advanced Media Handling
-* **Custom Video Player:** Integrated `ExoPlayer` with a sleek, custom-built Compose UI overlay featuring playback speed controls, dragging, and landscape toggles.
-* **Optimized Image Loading:** Uses Coil combined with a custom `NativeThumbnailFetcher` that hooks directly into the Android MediaStore for instantaneous grid thumbnail loading.
-* **Media Management:** Complete support for deleting, sharing (batch sharing included), favoring, and viewing detailed EXIF/metadata via a clean Bottom Sheet.
+**Package** `com.myurrrjj.chronicle` · **Min SDK** 26 · **Target SDK** 37 · **Language** Kotlin · **UI** 100% Compose
 
 ---
 
-## 🛠️ Tech Stack
+## Screenshots
 
-* **Language:** [Kotlin](https://kotlinlang.org/)
-* **UI Toolkit:** [Jetpack Compose](https://developer.android.com/jetpack/compose) (Material 3)
-* **Architecture:** MVI (Model-View-Intent)
-* **Dependency Injection:** [Dagger Hilt](https://dagger.dev/hilt/)
-* **Local Storage:** [Room Database](https://developer.android.com/training/data-storage/room) (for Favorites and Face Clusters)
-* **Image Loading:** [Coil](https://coil-kt.github.io/coil/)
-* **Video Playback:** [ExoPlayer / Media3](https://developer.android.com/media/media3)
-* **Machine Learning:** [Google ML Kit](https://developers.google.com/ml-kit) (Face Detection), [TensorFlow Lite](https://www.tensorflow.org/lite)
-* **Background Tasks:** [WorkManager](https://developer.android.com/topic/libraries/architecture/workmanager)
-* **Media Retrieval:** `MediaStore` API
+Drop your images into `docs/screenshots/` using the filenames below, or drag and drop straight over each placeholder in the GitHub editor.
+
+### Homescreen
+
+| All, Day grouping | Month grouping | Year grouping |
+|---|---|---|
+| ![Homescreen, day view](docs/screenshots/home-day.png) | ![Homescreen, month view](docs/screenshots/home-month.png) | ![Homescreen, year view](docs/screenshots/home-year.png) |
+
+### Albums
+
+| Album grid | Album opened |
+|---|---|
+| ![Albums](docs/screenshots/albums.png) | ![Album detail](docs/screenshots/album-detail.png) |
+
+### Videos
+
+| Video tab | Custom player |
+|---|---|
+| ![Videos](docs/screenshots/videos.png) | ![Video player](docs/screenshots/video-player.png) |
+
+### Favourites
+
+| Favourites grid | Empty state |
+|---|---|
+| ![Favourites](docs/screenshots/favourites.png) | ![Empty favourites](docs/screenshots/favourites-empty.png) |
+
+### People
+
+| People grid | Indexing in progress | Paused |
+|---|---|---|
+| ![People](docs/screenshots/people.png) | ![Indexing progress](docs/screenshots/people-progress.png) | ![Indexing paused](docs/screenshots/people-paused.png) |
+
+| Person opened | Rename dialog |
+|---|---|
+| ![Person detail](docs/screenshots/person-detail.png) | ![Rename person](docs/screenshots/person-rename.png) |
+
+### Detail viewer
+
+| Photo | Zoomed | Info sheet |
+|---|---|---|
+| ![Photo detail](docs/screenshots/photo-detail.png) | ![Zoomed photo](docs/screenshots/photo-zoom.png) | ![Info sheet](docs/screenshots/info-sheet.png) |
+
+### Selection mode
+
+| Multi select | Contextual bar |
+|---|---|
+| ![Selection](docs/screenshots/selection.png) | ![Selection bar](docs/screenshots/selection-bar.png) |
+
+### Search
+
+| Results | Indexing overlay |
+|---|---|
+| ![Search](docs/screenshots/search.png) | ![Search indexing](docs/screenshots/search-indexing.png) |
+
+### SettingsScreen
+
+| Settings top | Face indexing controls |
+|---|---|
+| ![Settings](docs/screenshots/settings.png) | ![Face indexing settings](docs/screenshots/settings-face.png) |
+
+### Face Quality Lab (developer tool)
+
+| Dataset | Metrics and similarity |
+|---|---|
+| ![Face lab](docs/screenshots/face-lab.png) | ![Face lab results](docs/screenshots/face-lab-results.png) |
 
 ---
 
-## 🏗️ Architecture
+## Features
 
-This project strictly follows the **MVI (Model-View-Intent)** architectural pattern to ensure predictable state management and unidirectional data flow.
+### Browse the whole library
 
-```text
-UI Layer (Compose)  --->  Dispatches Events (Intents)  --->  ViewModel
-      ^                                                         |
-      |                                                         v
-Observes State  <---  Produces New State (Copy)  <---  Business Logic / Repositories
+Four tabs: **All**, **Albums**, **Videos**, and **Others** (Favourites or People). Albums are built from your real folder structure, not a heuristic.
+
+Three grouping modes drive the timeline: **Day**, **Month** and **Year**. Each one changes both the header format and the cell size, so the grid gets denser as you zoom out.
+
+**Pinch the grid** to move between them. The gesture is a custom `galleryZoomGesture` with a 1.3x / 0.7x threshold and a haptic tick on every transition, so the change feels deliberate rather than accidental.
+
+### Find people
+
+On device face indexing, described in full below. Face detection with ML Kit, 128 dimension embeddings from a TFLite model, and greedy cosine clustering into person groups you can rename.
+
+### Look at a photo
+
+Tap any thumbnail and it flows into the full viewer on a **shared element transition**, keyed per media item. Inside the viewer you get pinch and double tap zoom, and the full metadata sheet.
+
+### Play a video
+
+A custom control surface over ExoPlayer with:
+
+- Playback speed control
+- Three resize modes: fit, crop, stretch
+- Subtitle track selection with an overlay renderer
+- Landscape handoff and auto hiding controls
+
+### Organise
+
+Long press to enter selection mode, then act on the whole selection at once:
+
+- **Favourite** or unfavourite
+- **Share** one or many through the system chooser
+- **Copy** the content URI to the clipboard
+- **Edit** by handing off to any installed editor
+- **Delete** through MediaStore
+- **Info** for the full metadata sheet
+
+The contextual bar and floating action bar appear and retreat based on selection and scroll state, so the grid stays clean when you are just looking.
+
+### Search
+
+An FTS4 index built over the library, refreshed incrementally as media changes. It indexes:
+
+- File name
+- Folder name
+- Type words (`photo`, `image`, `video`, `mp4`)
+- Favourite status
+- The full date string
+
+Queries are prefix matched per word, so `aug beach` finds beach photos from August.
+
+### Make it yours
+
+- Auto play videos on or off
+- Default grouping mode on launch
+- Face indexing schedule: manual, on app open, charging only, or overnight
+- Automatic pause on low battery and on low storage
+- Light and dark themes following the system, edge to edge, Material 3
+
+### Design details
+
+The interface is animated on purpose, not decoratively:
+
+- Shared element transitions between grid, album and person views
+- `bouncyClick`, a spring scale press effect used on every card and control
+- `AnimatedContent` tab transitions with directional slide and fade
+- Animated segmented controls that morph their background colour
+- Floating bars that appear on scroll up and hide on scroll down
+- Staggered, animated rows inside the info sheet
+
+---
+
+## How face indexing works
+
+This is the part worth reading before you touch the code.
+
+```
+MediaStore
+   |
+   v
+BitmapLoader           decode at 1024px, EXIF corrected, RGB_565
+   |
+   v
+MlKitFaceDetector      ACCURATE mode, all landmarks, minFaceSize 0.03
+   |                   rejects: <40px, bad aspect ratio, >60 degree head angles
+   v
+FaceCropper            5 point similarity transform to the ArcFace 112x112 template
+   |
+   v
+FaceEmbedder           sface TFLite, CPU only, 128 dimension vector
+   |
+   v
+Room transaction       embeddings + per photo ledger, atomically
+   |
+   v
+FaceClusterer          greedy cosine similarity, threshold 0.36
+   |
+   v
+People tab             covers, counts, rename
 ```
 
-* **Contract (`GalleryContract.kt`):** Defines `GalleryState`, `GalleryEvent`, and `GalleryEffect`.
-* **ViewModel (`GalleryViewModel.kt`):** Handles all logic, state mutations, and triggers side effects (like Navigation or Toasts).
-* **Repositories (`MediaStoreRepositoryImpl.kt`):** Abstracts the complex `ContentResolver` and `MediaStore` queries into clean Kotlin Flows.
+**Pause and resume** are cooperative, not cancellable. A persisted flag in DataStore is read only at batch boundaries, so a batch of 20 photos always commits whole or not at all. Resume continues from the first photo not in the ledger. Force stop exists as an escape hatch and is safe because the batch commit is a single Room transaction and orphaned embeddings are re-clustered at the start of the next run.
+
+**Progress** is a merge of four sources: WorkManager state, the persisted pause flag, live per photo counters held in memory, and durable counts from Room. `FaceIndexingController` is the single owner of every action, shared by both the gallery and settings screens.
 
 ---
 
-## 🚀 Getting Started
+## Tech stack
 
-### Prerequisites
-* Android Studio Iguana (or newer)
-* JDK 17+
-* Android SDK API Level 34
-
-### Installation
-1. Clone the repository:
-   ```bash
-   git clone [https://github.com/yourusername/JetpackComposeGallery.git](https://github.com/yourusername/JetpackComposeGallery.git)
-   ```
-2. Open the project in Android Studio.
-3. Sync the project with Gradle files.
-4. **Important for ML:** Ensure the `face_embedder.tflite` model is placed in the `app/src/main/assets/` directory (the app expects this for the `FaceEmbedder` to initialize).
-5. Build and run the app on a physical device (Emulators may struggle with hardware-accelerated video and ML clustering).
+| Area | Choice |
+|---|---|
+| Language | Kotlin 2.3 |
+| UI | Jetpack Compose, Material 3, Compose BOM 2026.03.01 |
+| Architecture | MVI, unidirectional data flow |
+| DI | Dagger Hilt 2.57.2 |
+| Local storage | Room 2.8.5, DataStore Preferences |
+| Image loading | Coil 2.7 with a custom MediaStore thumbnail fetcher |
+| Video | Media3 ExoPlayer 1.3 |
+| ML | ML Kit face detection 16.1.7, TensorFlow Lite 2.16.1 |
+| Background work | WorkManager 2.9.1 with Hilt integration |
+| Navigation | Navigation Compose 2.8.3, type safe routes |
+| Serialization | kotlinx.serialization 1.7.3 |
+| Build | AGP 8.13, Gradle 8.13, JDK 17, KSP |
 
 ---
 
-## 📂 Project Structure
+## Architecture
+
+### Layers
+
+```
+presentation/   Compose screens, MVI contracts, ViewModels
+domain/         Models, repository interfaces, use cases
+data/           MediaStore, Room, DataStore implementations
+core/           MVI base classes, ML pipeline, utilities
+worker/         WorkManager jobs
+di/             Hilt modules
+```
+
+Dependencies point inward. The domain layer knows nothing about Android, Room, or Compose.
+
+### MVI
+
+Every screen has a contract of three types: `State`, `Event`, `Effect`. `BaseViewModel` exposes a `StateFlow<State>`, consumes events from a `SharedFlow`, and emits one shot effects over a `Channel`.
+
+```
+UI dispatches Event  ->  ViewModel reduces State  ->  UI recomposes
+                     ->  Effect (navigation, share, delete)
+```
+
+### Database
+
+`GalleryDatabase`, version 5, with six entities:
+
+| Table | Purpose |
+|---|---|
+| `favourite_media` | Favourited media ids |
+| `face_embeddings` | One row per detected face: 128 float vector, bounding box, source media |
+| `face_clusters` | One row per person: label, cover embedding, timestamps |
+| `media_person` | Join table, cascade deletes from both parents |
+| `media_processing_status` | The indexing ledger, one row per processed photo |
+| `search_index` | FTS4 table for search |
+
+---
+
+## Project structure
+
+```
+app/src/main/java/com/myurrrjj/chronicle/
+├── core/
+│   ├── indexing/        FaceIndexingController, FaceIndexingProgressTracker
+│   ├── ml/              MlKitFaceDetector, FaceCropper, FaceEmbedder,
+│   │                    FaceQualityAssessor, FaceClusterer
+│   ├── presentation/    BaseViewModel, MVI contracts, modifiers, indexing UI
+│   └── util/            BitmapLoader, MediaIntents, NativeThumbnailFetcher
+├── data/
+│   ├── local/           GalleryDatabase, DAOs, entities, converters
+│   └── repository/      MediaStore, Face, Search, Settings implementations
+├── di/                  Hilt modules
+├── domain/
+│   ├── model/           MediaAsset, PersonCluster, AppSettings, FaceIndexingProgress
+│   ├── repository/      Interfaces
+│   └── usecase/         GroupMediaUseCase, GetFilteredMediaUseCase
+├── presentation/
+│   ├── gallery/         GalleryViewModel, screens, components
+│   ├── navigation/      Type safe routes, NavGraph
+│   ├── search/          Search screen and ViewModel
+│   ├── settings/        Settings screen and ViewModel
+│   └── editor/          Editing state models
+├── trial/               Face Quality Lab, a developer tool
+├── ui/theme/            Colours, typography, theme
+└── worker/              FaceIndexingWorker
+```
+
+---
+
+## Getting started
+
+### Requirements
+
+- Android Studio with AGP 8.13 support
+- JDK 17
+- Android SDK 37
+- A physical device for anything involving the camera roll or ML
+
+### Build
 
 ```bash
-com.example.jetpackcomposegalleryapp
-│
-├── core/               # Base MVI classes, Utility extensions, Custom Modifiers
-├── core.ml/            # ML Kit Face Detector, TFLite Embedder, Cropper
-├── data/               # Room DB, DAOs, Entities, MediaStore Implementation
-├── di/                 # Dagger Hilt Modules (DB, ML, Coil, Media)
-├── domain/             # Models (MediaAsset, Albums), Repository Interfaces
-├── presentation/       # UI Layer (Screens, Components, ViewModel, Navigation)
-├── ui.theme/           # Material 3 Color Schemes, Typography, Theme
-└── worker/             # WorkManager classes for background face indexing
+git clone https://github.com/myurrrjj/Chronicle-Gallery-App.git
+cd Chronicle-Gallery-App
+./gradlew :app:assembleDebug
 ```
 
----
+### The face model
 
-## 🤝 Contributing
+The embedding model is **not** in this repository. It is gitignored and must be added before face indexing will do anything:
 
-Contributions, issues, and feature requests are always welcome!
+```
+app/src/main/assets/sface_embedder_fp32.tflite
+```
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+`FaceEmbedder` expects input `[1, 112, 112, 3]` and output `[1, 128]`, and validates both shapes at load time. If the file is missing, the app still runs, but indexing completes with zero faces and no error, so check this first if the People tab stays empty.
 
 ---
 
-## 📝 License
+## Permissions
 
-Distributed under the MIT License. See `LICENSE` for more information.
+| Permission | Why |
+|---|---|
+| `READ_MEDIA_IMAGES` | Browsing the full photo library, building albums, indexing |
+| `READ_MEDIA_VIDEO` | The Videos tab and the video timeline |
+| `READ_MEDIA_VISUAL_USER_SELECTED` | Partial access on Android 14 and above |
+| `READ_EXTERNAL_STORAGE` | Same, on API 32 and below only |
+| `POST_NOTIFICATIONS` | Indexing progress notification |
+| `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC` | Keeping indexing alive while you leave the app |
+
+A system picker cannot replace these. Chronicle needs to enumerate the whole library, read folder structure for Albums, and keep persistent access so indexing can run across sessions.
 
 ---
-<div align="center">
-  <b>Built with ❤️ using Jetpack Compose</b>
-</div>
+
+## Privacy
+
+There is no network code in this app. No analytics, no crash reporting service, no accounts.
+
+- Photos and videos never leave the device
+- Face embeddings are computed locally and stored in a local Room database
+- Face crops are written to app private storage under `filesDir/face_crops`
+- Uninstalling the app, or tapping Reset in the People tab, deletes all of it
+
+---
+
+## Release builds
+
+Release builds run R8 with resource shrinking. Rules live in `app/proguard-rules.pro` and cover the five things that actually break under obfuscation here: kotlinx.serialization route lookups, the WorkManager worker class name, enum names persisted to DataStore, TensorFlow Lite JNI, and the `PlayerView` constructor used by layout inflation.
+
+`app/build/outputs/mapping/release/mapping.txt` is the only way to read a production stack trace. Archive it with every release.
+
+---
+
+## Roadmap
+
+- [ ] In app photo editor. `PhotoEditState` and `CropRect` exist as models, nothing renders them yet
+- [ ] Face indexing for videos, currently images only
+- [ ] Merge or split person clusters after the fact
+- [ ] Album covers and pinning
+- [ ] Re-index a single photo without a full reset
+
+---
+
+## Contributing
+
+Issues and pull requests are welcome. If you are changing the ML pipeline, run the Face Quality Lab first: it takes a labelled photo set, shows every detection decision and quality metric, and sweeps cosine thresholds so you can pick one from data rather than by guessing.
+
+---
+
+## License
+
+No license file is included in this repository yet. Add one before distributing or accepting contributions.
