@@ -40,8 +40,16 @@ fun SharedTransitionScope.PersonClusterCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val cropFile = remember(cluster.coverEmbeddingId) {
-        File(context.filesDir, "face_crops/${cluster.coverEmbeddingId}.jpg")
+    val cropFile = remember(cluster.coverMediaId, cluster.coverFaceIndex, cluster.coverEmbeddingId) {
+        val preferred = File(
+            context.filesDir,
+            "face_crops/${cluster.coverMediaId}_${cluster.coverFaceIndex}.jpg"
+        )
+        if (preferred.exists()) {
+            preferred
+        } else {
+            File(context.filesDir, "face_crops/${cluster.coverEmbeddingId}.jpg")
+        }
     }
     val imageRequest = remember(cropFile) {
         ImageRequest.Builder(context)

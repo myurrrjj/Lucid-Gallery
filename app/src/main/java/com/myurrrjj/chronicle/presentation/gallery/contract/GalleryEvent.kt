@@ -1,6 +1,7 @@
 package com.myurrrjj.chronicle.presentation.gallery.contract
 
 import com.myurrrjj.chronicle.core.presentation.mvi.ViewEvent
+import com.myurrrjj.chronicle.domain.model.FaceIndexingOptions
 import com.myurrrjj.chronicle.domain.model.GalleryViewMode
 import com.myurrrjj.chronicle.domain.model.MediaAsset
 import com.myurrrjj.chronicle.domain.model.PersonCluster
@@ -36,10 +37,23 @@ sealed class GalleryEvent : ViewEvent {
     object ClearSelection : GalleryEvent()
     data class ChangeViewMode(val viewMode: GalleryViewMode) : GalleryEvent()
 
-    object StartFaceIndexing : GalleryEvent()
+
+    object OpenFaceIndexingSheet : GalleryEvent()
+
+    object DismissFaceIndexingSheet : GalleryEvent()
+
+    data class StartFaceIndexing(val options: FaceIndexingOptions) : GalleryEvent()
+
+    object PauseFaceIndexing : GalleryEvent()
+
+    object ResumeFaceIndexing : GalleryEvent()
+
+    object ForceStopFaceIndexing : GalleryEvent()
+
+    object ResetFaceIndexing : GalleryEvent()
     object OnSettingsClicked : GalleryEvent()
 
-    object onSearchClicked : GalleryEvent()
+    object OnSearchClicked : GalleryEvent()
 
     data class SetSearchMediaList(val results: List<MediaAsset>) : GalleryEvent()
     object ClearSearchMediaList : GalleryEvent()

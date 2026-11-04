@@ -3,6 +3,8 @@ package com.myurrrjj.chronicle.domain.repository
 import com.myurrrjj.chronicle.domain.model.DetailedMediaInfo
 import com.myurrrjj.chronicle.domain.model.MediaAsset
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
 
 interface MediaRepository {
     fun getAllMedia(): Flow<List<MediaAsset>>
@@ -12,5 +14,6 @@ interface MediaRepository {
     suspend fun toggleFavourite(media: MediaAsset, isFavourite: Boolean)
 
     suspend fun getMediaDetails(uriString: String, isVideo: Boolean): DetailedMediaInfo
-
+    fun observeImageCount(): Flow<Int> =
+        getAllMedia().map { media -> media.count { !it.isVideo } }.catch { emit(0) }
 }

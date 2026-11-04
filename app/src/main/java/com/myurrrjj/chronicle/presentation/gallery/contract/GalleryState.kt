@@ -1,6 +1,8 @@
 package com.myurrrjj.chronicle.presentation.gallery.contract
 
 import com.myurrrjj.chronicle.core.presentation.mvi.ViewState
+import com.myurrrjj.chronicle.domain.model.FaceIndexingOptions
+import com.myurrrjj.chronicle.domain.model.FaceIndexingProgress
 import com.myurrrjj.chronicle.domain.model.GalleryViewMode
 import com.myurrrjj.chronicle.domain.model.MediaAsset
 import com.myurrrjj.chronicle.domain.model.PersonCluster
@@ -46,5 +48,8 @@ data class GalleryState(
     val configState: GalleryUiConfig = GalleryUiConfig(),
     val contentState: MediaContentState = MediaContentState(),
     val interactionState: InteractionState = InteractionState(),
-    val infoSheetState: InfoSheetState = InfoSheetState.Closed
+    val infoSheetState: InfoSheetState = InfoSheetState.Closed,
+    val faceIndexing: FaceIndexingProgress = FaceIndexingProgress(),
+    val faceIndexingOptions: FaceIndexingOptions = FaceIndexingOptions(),
+    val showFaceIndexingSheet: Boolean = false
 ) : ViewState

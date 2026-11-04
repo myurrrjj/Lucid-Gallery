@@ -10,5 +10,10 @@ interface FaceRepository {
     suspend fun getMediaIdsForCluster(clusterId: Long): List<Long>
     suspend fun deleteCluster(clusterId: Long)
 
+    fun observeProcessedCount(): Flow<Int>
+    fun observeFaceCount():Flow<Int>
+
+    suspend fun resetFaceIndexing(): Unit
+
 }
 

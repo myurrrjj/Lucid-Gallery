@@ -46,6 +46,7 @@ import com.myurrrjj.chronicle.presentation.gallery.contract.GalleryEvent
 import com.myurrrjj.chronicle.presentation.gallery.contract.GalleryState
 import com.myurrrjj.chronicle.presentation.gallery.model.GalleryTab
 import com.myurrrjj.chronicle.presentation.gallery.model.OthersSelection
+import com.myurrrjj.chronicle.presentation.indexing.FaceIndexingProgressCard
 
 @Composable
 fun SharedTransitionScope.GalleryGridContent(
@@ -163,14 +164,42 @@ fun SharedTransitionScope.GalleryGridContent(
                                 ((isPeopleTab && contentState.peopleClusters.isEmpty()) ||
                                         (isFavouritesTab && contentState.displayedMediaList.isEmpty()))
 
+                        if (isPeopleTab) {
+                            FaceIndexingProgressCard(
+                                progress = state.faceIndexing,
+                                onPause = { onEvent(GalleryEvent.PauseFaceIndexing) },
+                                onResume = { onEvent(GalleryEvent.ResumeFaceIndexing) },
+                                onForceStop = { onEvent(GalleryEvent.ForceStopFaceIndexing) },
+                                onReset = { onEvent(GalleryEvent.ResetFaceIndexing) },
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                            )
+                        }
+
                         if (isOthersEmpty) {
                             EmptyStateView(
                                 title = if (isPeopleTab) "Find People" else "No Favourites",
-                                description = if (isPeopleTab) "Plug in your device to scan your gallery for faces." else "No items found.",
-                                buttonText = if (isPeopleTab) "Start Indexing" else "Refresh",
+                                description = if (isPeopleTab) {
+                                    "Chronicle can group your photos by the people in them. " +
+                                            "It scans on this device, in the background, and you " +
+                                            "can pause it whenever you need your phone."
+                                } else {
+                                    "No items found."
+                                },
+                                buttonText = if (isPeopleTab) {
+                                    if (state.faceIndexing.canResume) "Resume Indexing" else "Start Indexing"
+                                } else {
+                                    "Refresh"
+                                },
                                 onClick = {
-                                    if (isPeopleTab) onEvent(GalleryEvent.StartFaceIndexing)
-                                    else onEvent(GalleryEvent.LoadMedia)
+                                    if (isPeopleTab) {
+                                        if (state.faceIndexing.canResume) {
+                                            onEvent(GalleryEvent.ResumeFaceIndexing)
+                                        } else {
+                                            onEvent(GalleryEvent.OpenFaceIndexingSheet)
+                                        }
+                                    } else {
+                                        onEvent(GalleryEvent.LoadMedia)
+                                    }
                                 },
                                 modifier = Modifier.padding(top = 64.dp)
                             )

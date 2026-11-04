@@ -28,7 +28,7 @@ fun GalleryTopAppBar(
         )
     } else {
         GalleryTopBar(
-            onSearchClick = { onEvent(GalleryEvent.onSearchClicked) },
+            onSearchClick = { onEvent(GalleryEvent.OnSearchClicked) },
             mediaCount = mediaCount,
             scrollBehaviour = scrollBehaviour,
             onSettingsClick = { onEvent(GalleryEvent.OnSettingsClicked) }

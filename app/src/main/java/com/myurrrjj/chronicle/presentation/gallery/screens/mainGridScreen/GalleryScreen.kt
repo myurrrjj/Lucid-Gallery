@@ -28,6 +28,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.myurrrjj.chronicle.core.presentation.indexing.FaceIndexingStartSheet
 import com.myurrrjj.chronicle.core.util.rememberScrollingUp
 import com.myurrrjj.chronicle.domain.model.PersonCluster
 import com.myurrrjj.chronicle.presentation.gallery.GalleryViewModel
@@ -193,5 +194,17 @@ fun GalleryScreen(
                 )
             }
         }
+    }
+
+
+    if (state.showFaceIndexingSheet) {
+        FaceIndexingStartSheet(
+            initialOptions = state.faceIndexingOptions,
+            progress = state.faceIndexing,
+            onDismiss = { viewModel.setEvent(GalleryEvent.DismissFaceIndexingSheet) },
+            onStart = { options ->
+                viewModel.setEvent(GalleryEvent.StartFaceIndexing(options))
+            }
+        )
     }
 }

@@ -5,6 +5,7 @@ import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import com.myurrrjj.chronicle.core.indexing.FaceIndexingController
 import com.myurrrjj.chronicle.core.presentation.mvi.BaseViewModel
 import com.myurrrjj.chronicle.domain.model.GalleryViewMode
 import com.myurrrjj.chronicle.domain.model.MediaAsset
@@ -39,16 +40,20 @@ class GalleryViewModel @Inject constructor(
     private val workManager: WorkManager,
     private val mediaRepository: MediaRepository,
     private val faceRepository: FaceRepository,
+    private val faceIndexingController: FaceIndexingController,
     private val settingsRepository: SettingsRepository,
     private val groupMediaUseCase: GroupMediaUseCase,
     private val getFilteredMediaUseCase: GetFilteredMediaUseCase
 ) : BaseViewModel<GalleryEvent, GalleryState, GalleryEffect>() {
     private var isFirstSettingsLoad = true
+    private var autoStartChecked = false
 
     init {
         observeFavorites()
         observePeopleClusters()
         observeSettings()
+        observeFaceIndexing()
+
     }
 
     override fun createInitialState(): GalleryState = GalleryState()
@@ -65,8 +70,10 @@ class GalleryViewModel @Inject constructor(
                     }
                     copy(
                         configState = configState.copy(
-                            currentViewMode = newViewMode, autoPlayVideo = settings.autoPlayVideo
-                        )
+                            currentViewMode = newViewMode,
+                            autoPlayVideo = settings.autoPlayVideo
+                        ),
+                        faceIndexingOptions = settings.faceIndexingOptions
                     ).also { isFirstSettingsLoad = false }
                 }
             }
@@ -211,12 +218,41 @@ class GalleryViewModel @Inject constructor(
                 regroupMedia(uiState.value.contentState.displayedMediaList, event.viewMode)
             }
 
-            GalleryEvent.StartFaceIndexing -> startManualFaceIndexing()
+            GalleryEvent.OpenFaceIndexingSheet -> {
+                setState { copy(showFaceIndexingSheet = true) }
+            }
+
+            GalleryEvent.DismissFaceIndexingSheet -> {
+                setState { copy(showFaceIndexingSheet = false) }
+            }
+
+            is GalleryEvent.StartFaceIndexing -> {
+                setState { copy(showFaceIndexingSheet = false) }
+                viewModelScope.launch {
+                    faceIndexingController.start(event.options)
+                }
+            }
+
+            GalleryEvent.PauseFaceIndexing -> {
+                viewModelScope.launch { faceIndexingController.pause() }
+            }
+
+            GalleryEvent.ResumeFaceIndexing -> {
+                viewModelScope.launch { faceIndexingController.resume() }
+            }
+
+            GalleryEvent.ForceStopFaceIndexing -> {
+                viewModelScope.launch { faceIndexingController.forceStop() }
+            }
+
+            GalleryEvent.ResetFaceIndexing -> {
+                viewModelScope.launch { faceIndexingController.reset() }
+            }
             GalleryEvent.OnSettingsClicked -> {
                 setEffect { GalleryEffect.NavigateToSettings }
             }
 
-            GalleryEvent.onSearchClicked -> setEffect { GalleryEffect.NavigateToSearch }
+            GalleryEvent.OnSearchClicked -> setEffect { GalleryEffect.NavigateToSearch }
             is GalleryEvent.SetSearchMediaList -> {
                 setState {
                     copy(
@@ -249,6 +285,14 @@ class GalleryViewModel @Inject constructor(
         viewModelScope.launch {
             faceRepository.getAllClusters().collect { clusters ->
                 setState { copy(contentState = contentState.copy(peopleClusters = clusters.toImmutableList())) }
+            }
+        }
+    }
+
+    private fun observeFaceIndexing() {
+        viewModelScope.launch {
+            faceIndexingController.progress.collect { progress ->
+                setState { copy(faceIndexing = progress) }
             }
         }
     }
@@ -482,6 +526,11 @@ class GalleryViewModel @Inject constructor(
                     uiState.value.contentState.displayedMediaList,
                     uiState.value.configState.currentViewMode
                 )
+
+                if (!autoStartChecked) {
+                    autoStartChecked = true
+                    faceIndexingController.autoStartIfNeeded()
+                }
             }
         }
     }
@@ -519,17 +568,17 @@ class GalleryViewModel @Inject constructor(
         }
     }
 
-    private fun startManualFaceIndexing() {
-        val constraints =
-            Constraints.Builder()
-                .setRequiresBatteryNotLow(true)
-                .setRequiresStorageNotLow(true).build()
-
-        val workRequest =
-            OneTimeWorkRequestBuilder<FaceIndexingWorker>().setConstraints(constraints).build()
-
-        workManager.enqueueUniqueWork(
-            "FaceIndexing", ExistingWorkPolicy.KEEP, workRequest
-        )
-    }
+//    private fun startManualFaceIndexing() {
+//        val constraints =
+//            Constraints.Builder()
+//                .setRequiresBatteryNotLow(true)
+//                .setRequiresStorageNotLow(true).build()
+//
+//        val workRequest =
+//            OneTimeWorkRequestBuilder<FaceIndexingWorker>().setConstraints(constraints).build()
+//
+//        workManager.enqueueUniqueWork(
+//            "FaceIndexing", ExistingWorkPolicy.KEEP, workRequest
+//        )
+//    }
 }

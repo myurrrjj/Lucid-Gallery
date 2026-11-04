@@ -45,6 +45,55 @@ interface FaceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCluster(cluster: FaceClusterEntity): Long
 
+    @Query("SELECT COUNT(*) FROM media_processing_status")
+    fun observeProcessedCount(): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM media_processing_status")
+    suspend fun getProcessedCount(): Int
+
+    @Query("select count(*) from face_embeddings")
+    fun observeFaceCount(): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM face_embeddings")
+    suspend fun getFaceCount(): Int
+
+    @Query("select embeddingId from face_embeddings where mediaId in (:mediaIds)")
+    suspend fun getEmbeddingIdsForMedia(mediaIds: List<Long>): List<Long>
+
+    @Query("DELETE FROM face_embeddings WHERE mediaId IN (:mediaIds)")
+    suspend fun deleteEmbeddingsForMediaIds(mediaIds: List<Long>)
+
+    @Transaction
+    suspend fun commitProcessedBatch(
+        mediaIds: List<Long>,
+        embeddings: List<FaceEmbeddingEntity>,
+        statuses: List<MediaProcessingStatusEntity>
+
+    ): List<Long> {
+        if (mediaIds.isNotEmpty()) {
+            deleteEmbeddingsForMediaIds(mediaIds)
+        }
+        val insertedIds = if (embeddings.isEmpty()) {
+            emptyList()
+        } else {
+            insertEmbeddings(embeddings)
+        }
+        if (statuses.isNotEmpty()) {
+            insertMediaProcessingStatuses(statuses)
+        }
+        return insertedIds
+    }
+
+    @Query(
+        """
+        SELECT e.* FROM face_embeddings e
+        LEFT JOIN media_person mp ON mp.embeddingId = e.embeddingId
+        WHERE mp.embeddingId IS NULL
+        """
+    )
+    suspend fun getUnclusteredEmbeddings(): List<FaceEmbeddingEntity>
+
+
     @Query("SELECT * FROM face_clusters ORDER BY personLabel COLLATE NOCASE ASC")
     fun getAllClusters(): Flow<List<FaceClusterEntity>>
 
@@ -57,6 +106,7 @@ interface FaceDao {
     SELECT
         fc.*,
         cover.mediaId AS coverMediaId,
+        cover.faceIndex AS coverFaceIndex,
         COUNT(DISTINCT e.mediaId) AS mediaCount
 
     FROM face_clusters AS fc
