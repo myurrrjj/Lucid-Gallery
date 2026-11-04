@@ -35,25 +35,25 @@ Pinch the grid to move between Day, Month and Year grouping.
 
 | Day | Month | Year |
 |:---:|:---:|:---:|
-| ![Homescreen, Day grouping](docs/screenshots/01-gallery-day.jpg) | ![Homescreen, Month grouping](docs/screenshots/02-gallery-month.jpg) | ![Homescreen, Year grouping](docs/screenshots/03-gallery-year.jpg) |
+| ![Homescreen, Day grouping](docs/screenshots/01-gallery-day.png) | ![Homescreen, Month grouping](docs/screenshots/02-gallery-month.png) | ![Homescreen, Year grouping](docs/screenshots/03-gallery-year.png) |
 
 ### Albums
 
 | Album grid | Album opened |
 |:---:|:---:|
-| ![Albums](docs/screenshots/04-albums.jpg) | ![Album opened](docs/screenshots/05-album-detail.jpg) |
+| ![Albums](docs/screenshots/04-albums.png) | ![Album opened](docs/screenshots/05-album-detail.png) |
 
 ### Favourites
 
-<img src="docs/screenshots/06-favourites.jpg" alt="Favourites" width="320">
+<img src="docs/screenshots/06-favourites.png" alt="Favourites" width="320">
 
 ### Search
 
-<img src="docs/screenshots/07-search.jpg" alt="Search" width="320">
+<img src="docs/screenshots/07-search.png" alt="Search" width="320">
 
 ### Video player
 
-<img src="docs/screenshots/08-video-player.jpg" alt="Custom video player" width="100%">
+<img src="docs/screenshots/08-video-player.png" alt="Custom video player" width="100%">
 
 ---
 
