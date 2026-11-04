@@ -98,7 +98,7 @@ class GalleryCombinedPerformanceBenchmark {
         ),
         compilationMode = CompilationMode.Partial(),
         startupMode = StartupMode.WARM,
-        iterations = 2,
+        iterations = 5,
         setupBlock = {
             grantMediaPermissions()
             pressHome()

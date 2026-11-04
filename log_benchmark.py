@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""Log an Android macrobenchmark run into an Excel tracker."""
+
 import argparse
 import glob
 import json
@@ -96,6 +98,12 @@ def _num(block, key, default=0.0):
     return float(value)
 
 
+def _kb(block, key="maximum"):
+    """KB value for a memory metric, or None when it was not collected."""
+    value = _num(block, key, default=None)
+    return None if value is None else int(round(value))
+
+
 def parse_benchmarks(json_path):
     with open(json_path, "r") as handle:
         data = json.load(handle)
@@ -110,12 +118,8 @@ def parse_benchmarks(json_path):
         overrun = _block(bench, "frameOverrunMs")
         frames = _block(bench, "frameCount")
 
-        heap_kb = _num(_block(bench, "memoryHeapSizeMaxKb"), "maximum")
-        if heap_kb == 0.0:
-            heap_kb = _num(_block(bench, "memoryRssAnonMaxKb"), "maximum")
-        rss_kb = _num(_block(bench, "memoryRssAnonMaxKb"), "maximum")
-        gpu_kb = _num(_block(bench, "memoryGpuMaxKb"), "maximum")
-        rss_file_kb = _num(_block(bench, "memoryRssFileMaxKb"), "maximum")
+        frames_median = _num(frames, "median", default=None)
+        frames_count = 0 if frames_median is None else int(round(frames_median))
 
         iterations = bench.get("repeatIterations")
         if iterations is None:
@@ -130,12 +134,12 @@ def parse_benchmarks(json_path):
                 "p95": _num(frame, "P95"),
                 "p99": _num(frame, "P99"),
                 "overrun_p95": _num(overrun, "P95"),
-                "heap_kb": int(round(heap_kb)),
-                "frames": int(round(_num(frames, "median"))) or 0,
-                "rss_kb": int(round(rss_kb)),
+                "heap_kb": _kb(_block(bench, "memoryHeapSizeMaxKb")),
+                "frames": frames_count,
+                "rss_kb": _kb(_block(bench, "memoryRssAnonMaxKb")),
                 "iterations": iterations or 0,
-                "gpu_kb": int(round(gpu_kb)),
-                "rss_file_kb": int(round(rss_file_kb)),
+                "gpu_kb": _kb(_block(bench, "memoryGpuMaxKb")),
+                "rss_file_kb": _kb(_block(bench, "memoryRssFileMaxKb")),
             }
         )
 
@@ -191,12 +195,16 @@ def _write_summary_rows(sheet):
     if not data_rows:
         return
     first, last = data_rows[0], data_rows[-1]
-    for offset, (label, function) in enumerate(((BEST_LABEL, "MIN"), (AVG_LABEL, "AVERAGE"))):
+    for offset, (label, function) in enumerate(
+        ((BEST_LABEL, "MIN"), (AVG_LABEL, "AVERAGE"))
+    ):
         row = last + 1 + offset
         sheet.cell(row=row, column=1, value=label).font = Font(bold=True)
         for column in SUM_COLUMNS:
             formula = f"={function}({column}{first}:{column}{last})"
-            cell = sheet.cell(row=row, column=column_index_from_string(column), value=formula)
+            cell = sheet.cell(
+                row=row, column=column_index_from_string(column), value=formula
+            )
             cell.font = Font(bold=True)
             if column in LATENCY_COLUMNS:
                 cell.number_format = "0.00"
@@ -230,23 +238,32 @@ def append_runs(note, rows, excel_path):
             round(row_data["p99"], 2),
             round(row_data["overrun_p95"], 2),
             row_data["heap_kb"],
-            f"=ROUND(J{row}/1024,1)",
+            f'=IF(ISNUMBER(J{row}),ROUND(J{row}/1024,1),"")',
             row_data["frames"],
             row_data["rss_kb"],
             row_data["iterations"],
             row_data["gpu_kb"],
-            f"=ROUND(O{row}/1024,1)",
+            f'=IF(ISNUMBER(O{row}),ROUND(O{row}/1024,1),"")',
             row_data["rss_file_kb"],
-            f"=ROUND(Q{row}/1024,1)",
+            f'=IF(ISNUMBER(Q{row}),ROUND(Q{row}/1024,1),"")',
         ]
         for column_index, value in enumerate(values, start=1):
             sheet.cell(row=row, column=column_index, value=value)
 
+        heap_mb = (
+            "n/a"
+            if row_data["heap_kb"] is None
+            else f"{row_data['heap_kb'] / 1024:.1f} MB"
+        )
+        gpu_mb = (
+            "n/a"
+            if row_data["gpu_kb"] is None
+            else f"{row_data['gpu_kb'] / 1024:.1f} MB"
+        )
         print(
             f"Logged Run #{next_run_id} ({commit}) on {row_data['device']}"
             f" -> P95 {row_data['p95']:.2f} ms | Overrun P95 {row_data['overrun_p95']:.2f} ms"
-            f" | Heap {row_data['heap_kb'] / 1024:.1f} MB"
-            f" | GPU {row_data['gpu_kb'] / 1024:.1f} MB"
+            f" | Heap {heap_mb} | GPU {gpu_mb}"
         )
         next_run_id += 1
 

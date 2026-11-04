@@ -1,18 +1,21 @@
-
 package com.myurrrjj.chronicle.trial
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Matrix
 import android.graphics.Paint
-import android.graphics.Typeface
-import android.media.ExifInterface
+import android.graphics.RectF
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,67 +24,97 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.myurrrjj.chronicle.core.ml.FaceCropper
 import com.myurrrjj.chronicle.core.ml.FaceEmbedder
+import com.myurrrjj.chronicle.core.ml.FaceQualityAssessor
+import com.myurrrjj.chronicle.core.ml.FaceQualityMetrics
 import com.myurrrjj.chronicle.core.ml.MlKitFaceDetector
+import com.myurrrjj.chronicle.core.util.BitmapLoader
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayInputStream
 import java.util.Locale
 import javax.inject.Inject
 import kotlin.math.sqrt
 
-data class TestFace(
-    val person: String,
-    val name: String,
-    val bitmap: Bitmap,
-    val crop: Bitmap?,
+enum class FaceSampleCondition(val title: String) {
+    SHARP_REFERENCE("Sharp frontal"), SHARP_PROFILE("Sharp profile"), MILD_MOTION_BLUR("Mild motion blur"), HEAVY_BLUR(
+        "Heavy blur"
+    ),
+    SMALL_OR_DISTANT("Small / distant face"), LOW_LIGHT("Low light / shadows"), OVEREXPOSED("Overexposed"), PARTIAL_OCCLUSION(
+        "Partially occluded"
+    ),
+    MULTI_FACE_CONTROL("Multi-face control"), NO_FACE_CONTROL("No-face control")
+}
+
+data class SelectedTestPhoto(
+    val id: String,
+    val uri: Uri,
+    val displayName: String,
+    val personLabel: String?,
+    val condition: FaceSampleCondition
+)
+
+data class TestFaceSample(
+    val faceIndex: Int,
+    val identityLabel: String?,
+    val accepted: Boolean,
+    val rejectionReasons: List<String>,
+    val qualityMetrics: FaceQualityMetrics?,
     val embedding: FloatArray?,
+    val embeddingError: String? = null
+)
+
+data class TestPhotoResult(
+    val photo: SelectedTestPhoto,
+    val preview: Bitmap?,
     val rawFaceCount: Int,
-    val validFaceCount: Int,
-    val rejectionReasons: List<String> = emptyList(),
+    val faceSamples: List<TestFaceSample>,
     val error: String? = null
 )
 
 data class SimilarityPair(
-    val left: String,
-    val right: String,
-    val similarity: Float
+    val left: String, val right: String, val similarity: Float
+)
+
+private data class IdentityEmbedding(
+    val identity: String, val displayName: String, val embedding: FloatArray
 )
 
 private val TEST_THRESHOLDS = listOf(
-    0.50f,
-    0.55f,
-    0.60f,
-    0.65f,
-    0.70f,
-    0.75f,
-    0.80f,
-    0.85f
+    0.50f, 0.55f, 0.60f, 0.65f, 0.70f, 0.75f, 0.80f, 0.85f
 )
 
 @HiltViewModel
@@ -94,643 +127,722 @@ class DirtyTestViewModel @Inject constructor(
     var isRunning by mutableStateOf(false)
         private set
 
-    var status by mutableStateOf(
-        "Ready. Put test photos in assets/face_data/person_a and person_b."
-    )
+    var status by mutableStateOf("Select photographs to build your test dataset.")
         private set
 
-    var results by mutableStateOf<List<TestFace>>(emptyList())
+    var selectedPhotos by mutableStateOf<List<SelectedTestPhoto>>(emptyList())
         private set
+
+    var results by mutableStateOf<List<TestPhotoResult>>(emptyList())
+        private set
+
+    fun addSelectedPhotos(
+        uris: List<Uri>, personLabel: String?, condition: FaceSampleCondition
+    ) {
+        val normalizedLabel = personLabel?.trim()?.takeIf { it.isNotEmpty() }
+
+        val existingUris = selectedPhotos.map { it.uri }.toSet()
+        val newUris = uris.distinct().filterNot { it in existingUris }
+
+        newUris.forEach { uri ->
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: SecurityException) {
+            }
+        }
+
+        val additions = newUris.map { uri ->
+            SelectedTestPhoto(
+                id = uri.toString(),
+                uri = uri,
+                displayName = resolveDisplayName(uri),
+                personLabel = normalizedLabel,
+                condition = condition
+            )
+        }
+
+        selectedPhotos = selectedPhotos + additions
+        status = "${selectedPhotos.size} photographs selected."
+    }
+
+    fun removeSelectedPhoto(photoId: String) {
+        val photo = selectedPhotos.find { it.id == photoId } ?: return
+
+        releasePhotoPermission(photo.uri)
+        selectedPhotos = selectedPhotos.filterNot { it.id == photoId }
+        clearResults()
+        status = "${selectedPhotos.size} photographs selected."
+    }
+
+    fun clearSelectedPhotos() {
+        selectedPhotos.forEach {
+            releasePhotoPermission(it.uri)
+        }
+
+        selectedPhotos = emptyList()
+        clearResults()
+        status = "Dataset cleared."
+    }
 
     fun runTest() {
         if (isRunning) return
 
+        if (selectedPhotos.isEmpty()) {
+            status = "Select at least one photograph."
+            return
+        }
+
         viewModelScope.launch {
             isRunning = true
-            status = "Loading test photos..."
+            clearResults()
+            status = "Starting face analysis..."
 
-            results = withContext(Dispatchers.Default) {
-                val personA = loadAndProcess("person_a", "A")
-                val personB = loadAndProcess("person_b", "B")
-                personA + personB
-            }
+            try {
+                val photosToProcess = selectedPhotos.toList()
 
-            val successful =
-                results.count { it.embedding != null }
+                for ((index, photo) in photosToProcess.withIndex()) {
+                    status =
+                        "Processing ${index + 1} of ${photosToProcess.size}: ${photo.displayName}"
 
-            val rawFaces =
-                results.sumOf { it.rawFaceCount }
+                    val result = processPhoto(photo)
 
-            val validFaces =
-                results.sumOf { it.validFaceCount }
-
-            status =
-                "Finished. $successful/${results.size} embeddings. " +
-                        "ML Kit found $rawFaces faces; " +
-                        "$validFaces passed validation."
-
-            isRunning = false
-        }
-    }
-
-    private suspend fun loadAndProcess(
-        folder: String,
-        personLabel: String
-    ): List<TestFace> {
-
-        val names = withContext(Dispatchers.IO) {
-            context.assets.list("face_data/$folder")
-                ?.filter {
-                    it.endsWith(".jpg", true) ||
-                            it.endsWith(".jpeg", true) ||
-                            it.endsWith(".png", true) ||
-                            it.endsWith(".webp", true)
+                    results = results + result
                 }
-                ?.sorted()
-                .orEmpty()
-        }
 
-        return names.mapIndexed { index, fileName ->
-            val label = "$personLabel${index + 1}"
+                val allFaces = results.flatMap { it.faceSamples }
+                val detected = results.sumOf { it.rawFaceCount }
+                val accepted = allFaces.count { it.accepted }
+                val embedded = allFaces.count { it.embedding != null }
+                val comparable = identityEmbeddings().size
 
-            processOne(
-                folder = folder,
-                fileName = fileName,
-                personLabel = personLabel,
-                label = label
-            )
+                status = buildString {
+                    appendLine("Analysis complete.")
+                    appendLine("Photographs: ${results.size}")
+                    appendLine("Detected faces: $detected")
+                    appendLine("Accepted faces: $accepted")
+                    appendLine("Generated embeddings: $embedded")
+                    append("Identity-comparable embeddings: $comparable")
+                }
+
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                status = "Analysis failed: ${e.message ?: e::class.simpleName}"
+            } finally {
+                isRunning = false
+            }
         }
     }
 
-    private suspend fun processOne(
-        folder: String,
-        fileName: String,
-        personLabel: String,
-        label: String
-    ): TestFace {
-
+    private suspend fun processPhoto(
+        photo: SelectedTestPhoto
+    ): TestPhotoResult {
         var original: Bitmap? = null
+        var preview: Bitmap? = null
 
-        return try {
-            original = withContext(Dispatchers.IO) {
-                loadOrientedBitmap(
-                    "face_data/$folder/$fileName"
-                )
-            } ?: return failed(
-                personLabel,
-                label,
-                fileName,
-                "Could not decode image."
-            )
-
-            val diagnostics =
-                faceDetector.detectFacesWithDiagnostics(original)
-
-            // Diagnostic-only image: draw every ML Kit detection box
-            // so false positives are immediately visible.
-            val diagnosticBitmap =
-                drawDetectionBoxes(
-                    original,
-                    diagnostics
-                )
-
-            val rawFaceCount =
-                diagnostics.size
-
-            val accepted =
-                diagnostics.filter { it.accepted }
-
-            val validFaceCount =
-                accepted.size
-
-            if (accepted.size != 1) {
-
-                val reasons =
-                    diagnostics
-                        .filter { !it.accepted }
-                        .flatMap {
-                            it.rejectionReasons
-                        }
-                        .distinct()
-
-                val error =
-                    when {
-                        rawFaceCount == 0 ->
-                            "ML Kit detected no face."
-
-                        accepted.isEmpty() &&
-                                reasons.isNotEmpty() ->
-                            "Detected face(s), but validation rejected them."
-
-                        accepted.size > 1 ->
-                            "Expected 1 accepted face, " +
-                                    "found $validFaceCount."
-
-                        else ->
-                            "Could not select exactly one accepted face."
-                    }
-
-                return TestFace(
-                    person = personLabel,
-                    name = fileName,
-                    bitmap = diagnosticBitmap,
-                    crop = null,
-                    embedding = null,
-                    rawFaceCount = rawFaceCount,
-                    validFaceCount = validFaceCount,
-                    rejectionReasons = reasons,
-                    error = error
-                )
-            }
-
-            val face =
-                accepted.single().face
-
-            val crop =
-                FaceCropper.cropFace(
-                    original,
-                    face
-                ) ?: return TestFace(
-                    person = personLabel,
-                    name = fileName,
-                    bitmap = diagnosticBitmap,
-                    crop = null,
-                    embedding = null,
-                    rawFaceCount = rawFaceCount,
-                    validFaceCount = validFaceCount,
-                    error = "Face crop failed."
-                )
-
-            val preprocessed =
-                FaceCropper.preprocessForEmbedding(crop)
-
-            val embedding =
-                faceEmbedder.generateEmbedding(
-                    preprocessed
-                )
-
-            TestFace(
-                person = personLabel,
-                name = fileName,
-                bitmap = diagnosticBitmap,
-                crop = preprocessed,
-                embedding = embedding,
-                rawFaceCount = rawFaceCount,
-                validFaceCount = validFaceCount,
-                error =
-                    if (embedding == null) {
-                        "Embedding generation failed."
-                    } else {
-                        null
-                    }
-            )
-
-        } catch (e: Exception) {
-
-            TestFace(
-                person = personLabel,
-                name = fileName,
-                bitmap =
-                    original
-                        ?: Bitmap.createBitmap(
-                            1,
-                            1,
-                            Bitmap.Config.ARGB_8888
-                        ),
-                crop = null,
-                embedding = null,
+        try {
+            original = BitmapLoader.loadBitmap(
+                contentResolver = context.contentResolver, uriString = photo.uri.toString()
+            ) ?: return TestPhotoResult(
+                photo = photo,
+                preview = null,
                 rawFaceCount = 0,
-                validFaceCount = 0,
-                error =
-                    "${e::class.simpleName}: " +
-                            (e.message ?: "unknown error")
-            )
-        }
-    }
-
-
-    private fun loadOrientedBitmap(
-        assetPath: String
-    ): Bitmap? {
-
-        val bytes =
-            context.assets.open(assetPath).use {
-                it.readBytes()
-            }
-
-        val bitmap =
-            BitmapFactory.decodeByteArray(
-                bytes,
-                0,
-                bytes.size
-            ) ?: return null
-
-        val orientation =
-            ExifInterface(
-                ByteArrayInputStream(bytes)
-            ).getAttributeInt(
-                ExifInterface.TAG_ORIENTATION,
-                ExifInterface.ORIENTATION_NORMAL
+                faceSamples = emptyList(),
+                error = "Could not decode photograph or access its URI."
             )
 
-        val matrix = Matrix()
+            val bitmap = original
 
-        when (orientation) {
+            val diagnostics = faceDetector.detectFacesWithDiagnostics(bitmap)
 
-            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> {
-                matrix.setScale(-1f, 1f)
+            preview = withContext(Dispatchers.Default) {
+                drawDetectionPreview(bitmap, diagnostics)
             }
 
-            ExifInterface.ORIENTATION_ROTATE_180 -> {
-                matrix.setRotate(180f)
-            }
+            val identityIsUnambiguous =
+                photo.personLabel != null && diagnostics.size == 1 && diagnostics.single().accepted
 
-            ExifInterface.ORIENTATION_FLIP_VERTICAL -> {
-                matrix.setScale(1f, -1f)
-            }
+            val samples = diagnostics.mapIndexed { index, diagnostic ->
 
-            ExifInterface.ORIENTATION_TRANSPOSE -> {
-                matrix.setRotate(90f)
-                matrix.postScale(-1f, 1f)
-            }
+                val face = diagnostic.face
+                val landmarkCount = listOf(
+                    com.google.mlkit.vision.face.FaceLandmark.LEFT_EYE,
+                    com.google.mlkit.vision.face.FaceLandmark.RIGHT_EYE,
+                    com.google.mlkit.vision.face.FaceLandmark.NOSE_BASE,
+                    com.google.mlkit.vision.face.FaceLandmark.MOUTH_LEFT,
+                    com.google.mlkit.vision.face.FaceLandmark.MOUTH_RIGHT
+                ).count {
+                    face.getLandmark(it) != null
+                }
 
-            ExifInterface.ORIENTATION_ROTATE_90 -> {
-                matrix.setRotate(90f)
-            }
+                val qualityMetrics = withContext(Dispatchers.Default) {
+                    FaceQualityAssessor.assess(
+                        bitmap = bitmap,
+                        faceBounds = face.boundingBox,
+                        alignmentLandmarkCount = landmarkCount
+                    )
+                }
 
-            ExifInterface.ORIENTATION_TRANSVERSE -> {
-                matrix.setRotate(-90f)
-                matrix.postScale(-1f, 1f)
-            }
-
-            ExifInterface.ORIENTATION_ROTATE_270 -> {
-                matrix.setRotate(-90f)
-            }
-
-            ExifInterface.ORIENTATION_NORMAL,
-            ExifInterface.ORIENTATION_UNDEFINED -> {
-                return bitmap
-            }
-        }
-
-        return try {
-
-            Bitmap.createBitmap(
-                bitmap,
-                0,
-                0,
-                bitmap.width,
-                bitmap.height,
-                matrix,
-                true
-            ).also { corrected ->
-
-                if (corrected !== bitmap) {
-                    bitmap.recycle()
+                if (!diagnostic.accepted) {
+                    TestFaceSample(
+                        faceIndex = index + 1,
+                        identityLabel = null,
+                        accepted = false,
+                        rejectionReasons = diagnostic.rejectionReasons,
+                        qualityMetrics = qualityMetrics,
+                        embedding = null
+                    )
+                } else {
+                    generateFaceSample(
+                        bitmap = bitmap,
+                        face = face,
+                        faceIndex = index + 1,
+                        identityLabel = if (identityIsUnambiguous) {
+                            photo.personLabel
+                        } else {
+                            null
+                        },
+                        qualityMetrics = qualityMetrics
+                    )
                 }
             }
 
-        } catch (e: Exception) {
+            val result = TestPhotoResult(
+                photo = photo,
+                preview = preview,
+                rawFaceCount = diagnostics.size,
+                faceSamples = samples
+            )
 
-            bitmap.recycle()
-            null
+            preview = null
+
+            return result
+
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            preview?.recycle()
+
+            return TestPhotoResult(
+                photo = photo,
+                preview = null,
+                rawFaceCount = 0,
+                faceSamples = emptyList(),
+                error = "${e::class.simpleName}: ${e.message ?: "Unknown error"}"
+            )
+        } finally {
+            original?.recycle()
         }
     }
 
-    private fun drawDetectionBoxes(
-        original: Bitmap,
-        diagnostics: List<com.myurrrjj.chronicle.core.ml.FaceDetectionDiagnostic>
-    ): Bitmap {
+    private suspend fun generateFaceSample(
+        bitmap: Bitmap,
+        face: com.google.mlkit.vision.face.Face,
+        faceIndex: Int,
+        identityLabel: String?,
+        qualityMetrics: FaceQualityMetrics?
+    ): TestFaceSample {
+        var cropped: Bitmap? = null
+        var preprocessed: Bitmap? = null
 
-        val output =
-            original.copy(Bitmap.Config.ARGB_8888, true)
+        try {
+            cropped = FaceCropper.cropFace(
+                originalBitmap = bitmap, face = face, margin = 0.2f
+            ) ?: return TestFaceSample(
+                faceIndex = faceIndex,
+                identityLabel = null,
+                accepted = true,
+                rejectionReasons = emptyList(),
+                qualityMetrics = qualityMetrics,
+                embedding = null,
+                embeddingError = "Face cropping failed."
+            )
+
+            preprocessed = FaceCropper.preprocessForEmbedding(cropped)
+
+            val embedding = withContext(Dispatchers.Default) {
+                faceEmbedder.generateEmbedding(preprocessed)
+            }
+
+            return TestFaceSample(
+                faceIndex = faceIndex,
+                identityLabel = if (embedding != null) identityLabel else null,
+                accepted = true,
+                rejectionReasons = emptyList(),
+                qualityMetrics = qualityMetrics,
+                embedding = embedding,
+                embeddingError = if (embedding == null) {
+                    "Embedding generation failed."
+                } else {
+                    null
+                }
+            )
+
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return TestFaceSample(
+                faceIndex = faceIndex,
+                identityLabel = null,
+                accepted = true,
+                rejectionReasons = emptyList(),
+                qualityMetrics = qualityMetrics,
+                embedding = null,
+                embeddingError = "${e::class.simpleName}: ${e.message}"
+            )
+        } finally {
+            if (preprocessed != null && preprocessed !== cropped) {
+                preprocessed.recycle()
+            }
+
+            cropped?.recycle()
+        }
+    }
+
+    private fun drawDetectionPreview(
+        original: Bitmap, diagnostics: List<com.myurrrjj.chronicle.core.ml.FaceDetectionDiagnostic>
+    ): Bitmap {
+        val maxDimension = 384f
+        val scale = minOf(
+            1f, maxDimension / maxOf(original.width, original.height)
+        )
+
+        val width = (original.width * scale).toInt().coerceAtLeast(1)
+        val height = (original.height * scale).toInt().coerceAtLeast(1)
+
+        val output = Bitmap.createBitmap(
+            width, height, Bitmap.Config.ARGB_8888
+        )
 
         val canvas = Canvas(output)
+        val scaleX = width.toFloat() / original.width
+        val scaleY = height.toFloat() / original.height
 
-        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        canvas.drawBitmap(
+            original,
+            null,
+            RectF(0f, 0f, width.toFloat(), height.toFloat()),
+            Paint(Paint.FILTER_BITMAP_FLAG)
+        )
+
+        val boxPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
-            strokeWidth = (original.width * 0.006f).coerceAtLeast(4f)
+            strokeWidth = 2.5f
         }
 
         val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
-            textSize = (original.width * 0.035f).coerceAtLeast(28f)
-            typeface = Typeface.DEFAULT_BOLD
+            textSize = 12f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
         }
 
         diagnostics.forEachIndexed { index, diagnostic ->
-            val box = diagnostic.face.boundingBox
+            val bounds = diagnostic.face.boundingBox
 
-            strokePaint.color =
-                if (diagnostic.accepted) Color.GREEN else Color.RED
+            boxPaint.color = if (diagnostic.accepted) {
+                Color.GREEN
+            } else {
+                Color.RED
+            }
 
-            textPaint.color = strokePaint.color
+            textPaint.color = boxPaint.color
 
-            canvas.drawRect(box, strokePaint)
+            val left = bounds.left * scaleX
+            val top = bounds.top * scaleY
+            val right = bounds.right * scaleX
+            val bottom = bounds.bottom * scaleY
 
-            val label =
-                if (diagnostic.accepted) {
-                    "#${index + 1} ACCEPTED"
-                } else {
-                    "#${index + 1} REJECTED"
-                }
-
-            val textX = box.left.toFloat().coerceAtLeast(4f)
-            val textY =
-                (box.top - 8f).coerceAtLeast(textPaint.textSize)
+            canvas.drawRect(left, top, right, bottom, boxPaint)
 
             canvas.drawText(
-                label,
-                textX,
-                textY,
-                textPaint
+                "#${index + 1}", left.coerceAtLeast(2f), (top - 4f).coerceAtLeast(12f), textPaint
             )
         }
 
         return output
     }
 
-    private fun failed(
-        person: String,
-        label: String,
-        fileName: String,
-        error: String
-    ) =
-        TestFace(
-            person = person,
-            name = fileName,
-            bitmap =
-                Bitmap.createBitmap(
-                    1,
-                    1,
-                    Bitmap.Config.ARGB_8888
-                ),
-            crop = null,
-            embedding = null,
-            rawFaceCount = 0,
-            validFaceCount = 0,
-            error = error
-        )
+    private fun identityEmbeddings(): List<IdentityEmbedding> {
+        return results.flatMap { result ->
+            result.faceSamples.mapNotNull { sample ->
+                val identity = sample.identityLabel ?: return@mapNotNull null
+                val embedding = sample.embedding ?: return@mapNotNull null
 
-    fun samePersonPairs(): List<SimilarityPair> =
-        pairsFor { a, b ->
-            a.person == b.person
-        }
-
-    fun differentPersonPairs(): List<SimilarityPair> =
-        pairsFor { a, b ->
-            a.person != b.person
-        }
-
-    private fun pairsFor(
-        condition: (TestFace, TestFace) -> Boolean
-    ): List<SimilarityPair> {
-
-        val usable =
-            results.filter {
-                it.embedding != null
+                IdentityEmbedding(
+                    identity = identity,
+                    displayName = "${result.photo.displayName} / Face ${sample.faceIndex}",
+                    embedding = embedding
+                )
             }
+        }
+    }
 
-        val pairs =
-            mutableListOf<SimilarityPair>()
+    fun samePersonPairs(): List<SimilarityPair> {
+        return calculatePairs { left, right ->
+            left.identity == right.identity
+        }
+    }
 
-        for (i in 0 until usable.size) {
+    fun differentPersonPairs(): List<SimilarityPair> {
+        return calculatePairs { left, right ->
+            left.identity != right.identity
+        }
+    }
 
-            for (j in i + 1 until usable.size) {
+    private fun calculatePairs(
+        condition: (IdentityEmbedding, IdentityEmbedding) -> Boolean
+    ): List<SimilarityPair> {
+        val embeddings = identityEmbeddings()
+        val pairs = mutableListOf<SimilarityPair>()
 
-                val a = usable[i]
-                val b = usable[j]
+        for (i in embeddings.indices) {
+            for (j in i + 1 until embeddings.size) {
+                val left = embeddings[i]
+                val right = embeddings[j]
 
-                if (condition(a, b)) {
-
+                if (condition(left, right)) {
                     pairs += SimilarityPair(
-                        left =
-                            "${a.person}/${a.name}",
-
-                        right =
-                            "${b.person}/${b.name}",
-
-                        similarity =
-                            cosineSimilarity(
-                                a.embedding!!,
-                                b.embedding!!
-                            )
+                        left = "${left.identity}/${left.displayName}",
+                        right = "${right.identity}/${right.displayName}",
+                        similarity = cosineSimilarity(
+                            left.embedding, right.embedding
+                        )
                     )
                 }
             }
         }
 
-        return pairs.sortedByDescending {
-            it.similarity
-        }
+        return pairs.sortedByDescending { it.similarity }
     }
 
     private fun cosineSimilarity(
-        a: FloatArray,
-        b: FloatArray
+        a: FloatArray, b: FloatArray
     ): Float {
-
-        require(
-            a.size == b.size
-        ) {
-            "Embedding sizes differ: " +
-                    "${a.size} vs ${b.size}"
+        require(a.size == b.size) {
+            "Embedding sizes differ: ${a.size} vs ${b.size}"
         }
 
-        var dot = 0f
-        var normA = 0f
-        var normB = 0f
+        var dot = 0.0
+        var normA = 0.0
+        var normB = 0.0
 
         for (i in a.indices) {
+            require(a[i].isFinite() && b[i].isFinite()) {
+                "Embedding contains a non-finite value."
+            }
+
             dot += a[i] * b[i]
             normA += a[i] * a[i]
             normB += b[i] * b[i]
         }
 
-        return if (
-            normA == 0f ||
-            normB == 0f
-        ) {
-            0f
-        } else {
-            dot /
-                    (
-                            sqrt(normA) *
-                                    sqrt(normB)
-                            )
+        if (normA <= 0.0 || normB <= 0.0) return 0f
+
+        return (dot / (sqrt(normA) * sqrt(normB))).toFloat()
+    }
+
+    private fun resolveDisplayName(uri: Uri): String {
+        return try {
+            context.contentResolver.query(
+                uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+
+                    if (index >= 0) {
+                        cursor.getString(index)
+                    } else {
+                        null
+                    }
+                } else {
+                    null
+                }
+            } ?: uri.lastPathSegment ?: "Selected photograph"
+        } catch (_: Exception) {
+            uri.lastPathSegment ?: "Selected photograph"
         }
     }
 
+    private fun releasePhotoPermission(uri: Uri) {
+        try {
+            context.contentResolver.releasePersistableUriPermission(
+                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        } catch (_: SecurityException) {
+        } catch (_: IllegalArgumentException) {
+        }
+    }
+
+    private fun clearResults() {
+        results.forEach { result ->
+            result.preview?.takeUnless { it.isRecycled }?.recycle()
+        }
+
+        results = emptyList()
+    }
+
     override fun onCleared() {
-        /*
-         * FaceEmbedder and MlKitFaceDetector are @Singletons.
-         * Hilt owns their lifecycle.
-         */
+        clearResults()
+
+        selectedPhotos.forEach {
+            releasePhotoPermission(it.uri)
+        }
+
         super.onCleared()
     }
 }
 
 @Composable
 fun DirtyTestScreen(
-    viewModel: DirtyTestViewModel =
-        hiltViewModel()
+    viewModel: DirtyTestViewModel = hiltViewModel()
 ) {
+    var identityLabel by rememberSaveable {
+        mutableStateOf("")
+    }
 
-    val results =
-        viewModel.results
+    var qualityOnly by rememberSaveable {
+        mutableStateOf(false)
+    }
 
-    val samePairs =
-        viewModel.samePersonPairs()
+    var selectedCondition by rememberSaveable {
+        mutableStateOf(FaceSampleCondition.SHARP_REFERENCE.name)
+    }
 
-    val differentPairs =
-        viewModel.differentPersonPairs()
+    var conditionMenuExpanded by remember {
+        mutableStateOf(false)
+    }
+
+    val condition = FaceSampleCondition.valueOf(selectedCondition)
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(
+            maxItems = 50
+        )
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            viewModel.addSelectedPhotos(
+                uris = uris,
+                personLabel = if (qualityOnly) null else identityLabel.trim(),
+                condition = condition
+            )
+        }
+    }
+
+    val selectedPhotos = viewModel.selectedPhotos
+    val results = viewModel.results
+    val samePairs = viewModel.samePersonPairs()
+    val differentPairs = viewModel.differentPersonPairs()
 
     LazyColumn(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .background(
-                    MaterialTheme.colorScheme.background
-                )
-                .padding(16.dp),
-
-        verticalArrangement =
-            Arrangement.spacedBy(12.dp)
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-
         item {
-
-            Text(
-                text = "Face Embedding Lab",
-                style =
-                    MaterialTheme.typography.headlineSmall,
-                fontWeight =
-                    FontWeight.Bold
-            )
-
-            Spacer(
-                Modifier.height(4.dp)
-            )
-
-            Text(
-                text =
-                    "Detector + embedding experiment",
-                style =
-                    MaterialTheme.typography.bodyMedium
-            )
-
-            Spacer(
-                Modifier.height(8.dp)
-            )
-
-            Button(
-                onClick =
-                    viewModel::runTest,
-
-                enabled =
-                    !viewModel.isRunning,
-
-                modifier =
-                    Modifier.fillMaxWidth()
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                Text(
+                    text = "Face Quality Lab",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
 
-                if (viewModel.isRunning) {
+                Text(
+                    text = "Build a labelled dataset using photographs from your gallery.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
 
-                    CircularProgressIndicator(
-                        modifier =
-                            Modifier.size(18.dp),
+                OutlinedTextField(
+                    value = identityLabel,
+                    onValueChange = { identityLabel = it },
+                    label = { Text("Identity label") },
+                    placeholder = { Text("Person A") },
+                    enabled = !qualityOnly,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
 
-                        strokeWidth = 2.dp
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = qualityOnly, onCheckedChange = { qualityOnly = it })
+
+                    Text(
+                        text = "Quality-only control (no identity)",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+
+                Box {
+                    OutlinedButton(
+                        onClick = {
+                            conditionMenuExpanded = true
+                        }, modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Condition: ${condition.title}")
+                    }
+
+                    DropdownMenu(
+                        expanded = conditionMenuExpanded, onDismissRequest = {
+                            conditionMenuExpanded = false
+                        }) {
+                        FaceSampleCondition.entries.forEach { option ->
+                            DropdownMenuItem(text = { Text(option.title) }, onClick = {
+                                selectedCondition = option.name
+                                conditionMenuExpanded = false
+                            })
+                        }
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        photoPickerLauncher.launch(
+                            PickVisualMediaRequest(
+                                ActivityResultContracts.PickVisualMedia.ImageOnly
+                            )
+                        )
+                    },
+                    enabled = qualityOnly || identityLabel.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Select photos from gallery")
+                }
+
+                HorizontalDivider()
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Selected photographs (${selectedPhotos.size})",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
                     )
 
-                    Spacer(
-                        Modifier.width(8.dp)
-                    )
-
-                    Text("Running...")
-
-                } else {
-
-                    Text("Run Face Test")
+                    TextButton(
+                        onClick = viewModel::clearSelectedPhotos,
+                        enabled = selectedPhotos.isNotEmpty() && !viewModel.isRunning
+                    ) {
+                        Text("Clear all")
+                    }
                 }
             }
+        }
 
-            Spacer(
-                Modifier.height(6.dp)
-            )
+        items(
+            items = selectedPhotos, key = { "selected_${it.id}" }) { photo ->
+            SelectedPhotoCard(
+                photo = photo, onRemove = {
+                    viewModel.removeSelectedPhoto(photo.id)
+                })
+        }
 
-            Text(
-                text =
-                    viewModel.status,
+        item {
+            Column(
+                modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = viewModel::runTest,
+                    enabled = selectedPhotos.isNotEmpty() && !viewModel.isRunning,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (viewModel.isRunning) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp), strokeWidth = 2.dp
+                        )
+                        Spacer(Modifier.size(8.dp))
+                        Text("Processing...")
+                    } else {
+                        Text("Run face analysis")
+                    }
+                }
 
-                style =
-                    MaterialTheme.typography.bodySmall
-            )
+                Text(
+                    text = viewModel.status, style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
 
         if (results.isNotEmpty()) {
-
             item {
-
-                SectionTitle(
-                    "1. Per-photo pipeline"
-                )
+                SectionTitle("1. Per-photo detection and quality")
             }
 
             items(
-                items = results,
-
-                key = {
-                    "${it.person}/${it.name}"
-                }
-            ) { result ->
-
+                items = results, key = { "result_${it.photo.id}" }) { result ->
                 PhotoResultCard(result)
             }
 
             item {
-
-                SectionTitle(
-                    "2. Same-person similarities"
-                )
-
+                SectionTitle("2. Same-person similarities")
                 PairSummary(
-                    title =
-                        "Pairs where the folder says they are the same person",
-
-                    pairs =
-                        samePairs
+                    title = "Pairs belonging to the same labelled identity", pairs = samePairs
                 )
             }
 
             item {
-
-                SectionTitle(
-                    "3. Different-person similarities"
-                )
-
+                SectionTitle("3. Different-person similarities")
                 PairSummary(
-                    title =
-                        "Pairs where the folders say they are different people",
-
-                    pairs =
-                        differentPairs
+                    title = "Pairs belonging to different labelled identities",
+                    pairs = differentPairs
                 )
             }
 
             item {
-
-                SectionTitle(
-                    "4. Threshold sweep"
-                )
-
+                SectionTitle("4. Threshold sweep")
                 ThresholdSweep(
-                    samePairs =
-                        samePairs,
-
-                    differentPairs =
-                        differentPairs
+                    samePairs = samePairs, differentPairs = differentPairs
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SelectedPhotoCard(
+    photo: SelectedTestPhoto, onRemove: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Text(
+                    text = photo.displayName, fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    text = "Identity: ${photo.personLabel ?: "None"}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+
+                Text(
+                    text = "Condition: ${photo.condition.title}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            TextButton(onClick = onRemove) {
+                Text("Remove")
             }
         }
     }
@@ -738,125 +850,131 @@ fun DirtyTestScreen(
 
 @Composable
 private fun PhotoResultCard(
-    result: TestFace
+    result: TestPhotoResult
 ) {
-
     Card(
-        modifier =
-            Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth()
     ) {
-
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(10.dp),
-
-            verticalAlignment =
-                Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-
-            Image(
-                bitmap =
-                    result.bitmap.asImageBitmap(),
-
-                contentDescription =
-                    result.name,
-
-                modifier =
-                    Modifier.size(72.dp)
+            Text(
+                text = result.photo.displayName,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
             )
 
-            Spacer(
-                Modifier.width(10.dp)
+            Text(
+                text = "Identity: ${result.photo.personLabel ?: "Unlabelled"}",
+                style = MaterialTheme.typography.bodySmall
             )
 
-            Column(
-                modifier =
-                    Modifier.weight(1f)
-            ) {
+            Text(
+                text = "Condition: ${result.photo.condition.title}",
+                style = MaterialTheme.typography.bodySmall
+            )
 
-                Text(
-                    text =
-                        "${result.person} — ${result.name}",
-
-                    fontWeight =
-                        FontWeight.Bold
+            result.preview?.let { bitmap ->
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = "Detected faces",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
                 )
-
-                Text(
-                    "ML Kit faces: " +
-                            result.rawFaceCount
-                )
-
-                Text(
-                    "Accepted faces: " +
-                            result.validFaceCount
-                )
-
-                if (result.embedding != null) {
-
-                    Text(
-                        "Embedding: ✓ " +
-                                "${result.embedding.size} values"
-                    )
-
-                } else {
-
-                    Text(
-                        "Embedding: ✗"
-                    )
-                }
-
-                result.error?.let {
-
-                    Text(
-                        text = it,
-
-                        color =
-                            MaterialTheme.colorScheme.error,
-
-                        style =
-                            MaterialTheme.typography.bodySmall
-                    )
-                }
-
-                if (
-                    result.rejectionReasons.isNotEmpty()
-                ) {
-
-                    Spacer(
-                        Modifier.height(4.dp)
-                    )
-
-                    Text(
-                        text =
-                            "Rejected because: " +
-                                    result.rejectionReasons.joinToString(
-                                        separator = "; "
-                                    ),
-
-                        color =
-                            MaterialTheme.colorScheme.error,
-
-                        style =
-                            MaterialTheme.typography.bodySmall
-                    )
-                }
             }
 
-            result.crop?.let {
+            Text("ML Kit detections: ${result.rawFaceCount}")
 
-                Image(
-                    bitmap =
-                        it.asImageBitmap(),
-
-                    contentDescription =
-                        "112x112 face crop",
-
-                    modifier =
-                        Modifier.size(56.dp)
+            if (result.faceSamples.isEmpty()) {
+                Text(
+                    text = result.error ?: "No faces detected.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
                 )
+            }
+
+            result.faceSamples.forEach { sample ->
+                HorizontalDivider()
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Text(
+                        text = "Face ${sample.faceIndex}: ${
+                            if (sample.accepted) "BASIC PASS" else "BASIC REJECT"
+                        }", fontWeight = FontWeight.Bold, color = if (sample.accepted) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        }
+                    )
+
+                    sample.qualityMetrics?.let { metrics ->
+                        Text(
+                            text = "Dimensions: ${metrics.faceWidthPx} × ${metrics.faceHeightPx}px",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+
+                        Text(
+                            text = "Laplacian variance: ${
+                                formatMetric(metrics.laplacianVariance)
+                            }", style = MaterialTheme.typography.bodySmall
+                        )
+
+                        Text(
+                            text = "Mean luminance: ${
+                                formatMetric(metrics.meanLuminance)
+                            }", style = MaterialTheme.typography.bodySmall
+                        )
+
+                        Text(
+                            text = "Luminance SD: ${
+                                formatMetric(metrics.luminanceStdDev)
+                            }", style = MaterialTheme.typography.bodySmall
+                        )
+
+                        Text(
+                            text = "Alignment landmarks: ${metrics.alignmentLandmarkCount}/5",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+
+                        if (metrics.wasClippedToImage) {
+                            Text(
+                                text = "Face bounding box clipped to image boundaries.",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+
+                    if (sample.rejectionReasons.isNotEmpty()) {
+                        Text(
+                            text = "Rejection: ${sample.rejectionReasons.joinToString("; ")}",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+
+                    Text(
+                        text = when {
+                            sample.embedding != null -> "Embedding: ${sample.embedding.size} values"
+                            sample.embeddingError != null -> "Embedding: ${sample.embeddingError}"
+                            else -> "Embedding: not generated"
+                        }, style = MaterialTheme.typography.bodySmall
+                    )
+
+                    if (sample.identityLabel != null) {
+                        Text(
+                            text = "Included in identity comparisons: ${sample.identityLabel}",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
             }
         }
     }
@@ -864,253 +982,114 @@ private fun PhotoResultCard(
 
 @Composable
 private fun PairSummary(
-    title: String,
-    pairs: List<SimilarityPair>
+    title: String, pairs: List<SimilarityPair>
 ) {
-
     Card(
-        modifier =
-            Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth()
     ) {
-
         Column(
-            modifier =
-                Modifier.padding(12.dp)
+            modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-
             Text(
-                title,
-                style =
-                    MaterialTheme.typography.bodyMedium
+                text = title, fontWeight = FontWeight.Bold
             )
 
             if (pairs.isEmpty()) {
-
                 Text(
-                    "No usable pairs yet.",
-                    style =
-                        MaterialTheme.typography.bodySmall
+                    text = "No comparable identity pairs yet.",
+                    style = MaterialTheme.typography.bodySmall
                 )
+            } else {
+                pairs.forEach { pair ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "${pair.left} ↔ ${pair.right}",
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodySmall
+                        )
 
-                return@Column
-            }
-
-            Spacer(
-                Modifier.height(8.dp)
-            )
-
-            pairs.forEach { pair ->
-
-                Row(
-                    modifier =
-                        Modifier.fillMaxWidth(),
-
-                    horizontalArrangement =
-                        Arrangement.SpaceBetween
-                ) {
-
-                    Text(
-                        text =
-                            "${pair.left} ↔ ${pair.right}",
-
-                        modifier =
-                            Modifier.weight(1f),
-
-                        style =
-                            MaterialTheme.typography.bodySmall
-                    )
-
-                    Text(
-                        text =
-                            formatSimilarity(
-                                pair.similarity
-                            ),
-
-                        fontWeight =
-                            FontWeight.Bold
-                    )
+                        Text(
+                            text = formatMetric(pair.similarity.toDouble()),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
 
-                Spacer(
-                    Modifier.height(4.dp)
+                HorizontalDivider()
+
+                Text("Pair count: ${pairs.size}")
+                Text("Minimum: ${formatMetric(pairs.minOf { it.similarity }.toDouble())}")
+                Text("Maximum: ${formatMetric(pairs.maxOf { it.similarity }.toDouble())}")
+                Text("Mean: ${formatMetric(pairs.map { it.similarity }.average())}")
+                Text(
+                    "Median: ${formatMetric(median(pairs.map { it.similarity.toDouble() }))}"
                 )
             }
-
-            HorizontalDivider(
-                modifier =
-                    Modifier.padding(
-                        vertical = 6.dp
-                    )
-            )
-
-            Text(
-                "count: ${pairs.size}"
-            )
-
-            Text(
-                "min: ${
-                    formatSimilarity(
-                        pairs.minOf {
-                            it.similarity
-                        }
-                    )
-                }"
-            )
-
-            Text(
-                "max: ${
-                    formatSimilarity(
-                        pairs.maxOf {
-                            it.similarity
-                        }
-                    )
-                }"
-            )
-
-            Text(
-                "mean: ${
-                    formatSimilarity(
-                        pairs
-                            .map {
-                                it.similarity
-                            }
-                            .average()
-                            .toFloat()
-                    )
-                }"
-            )
-
-            Text(
-                "median: ${
-                    formatSimilarity(
-                        median(
-                            pairs.map {
-                                it.similarity
-                            }
-                        )
-                    )
-                }"
-            )
         }
     }
 }
 
 @Composable
 private fun ThresholdSweep(
-    samePairs: List<SimilarityPair>,
-    differentPairs: List<SimilarityPair>
+    samePairs: List<SimilarityPair>, differentPairs: List<SimilarityPair>
 ) {
-
     Card(
-        modifier =
-            Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth()
     ) {
-
         Column(
-            modifier =
-                Modifier.padding(12.dp)
+            modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-
             Text(
-                "Same-person vs different-person pairs",
-                fontWeight =
-                    FontWeight.Bold
+                text = "Same-person vs different-person pairs", fontWeight = FontWeight.Bold
             )
 
-            Spacer(
-                Modifier.height(8.dp)
-            )
-
-            Row(
-                modifier =
-                    Modifier.fillMaxWidth()
-            ) {
-
+            Row(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    "Threshold",
-                    modifier =
-                        Modifier.weight(1f),
-
-                    fontWeight =
-                        FontWeight.Bold
+                    "Threshold", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold
                 )
-
                 Text(
-                    "Same",
-                    modifier =
-                        Modifier.weight(1f),
-
-                    fontWeight =
-                        FontWeight.Bold
+                    "Same", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold
                 )
-
                 Text(
-                    "Different",
-                    modifier =
-                        Modifier.weight(1f),
-
-                    fontWeight =
-                        FontWeight.Bold
+                    "Different", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold
                 )
             }
 
             TEST_THRESHOLDS.forEach { threshold ->
+                val sameAbove = samePairs.count {
+                    it.similarity >= threshold
+                }
 
-                val sameAbove =
-                    samePairs.count {
-                        it.similarity >= threshold
-                    }
-
-                val differentAbove =
-                    differentPairs.count {
-                        it.similarity >= threshold
-                    }
+                val differentAbove = differentPairs.count {
+                    it.similarity >= threshold
+                }
 
                 Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(
-                                vertical = 3.dp
-                            )
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-
                     Text(
-                        formatSimilarity(
-                            threshold
-                        ),
-
-                        modifier =
-                            Modifier.weight(1f)
+                        formatMetric(threshold.toDouble()), modifier = Modifier.weight(1f)
                     )
 
                     Text(
-                        "$sameAbove / ${samePairs.size}",
-
-                        modifier =
-                            Modifier.weight(1f)
+                        "$sameAbove / ${samePairs.size}", modifier = Modifier.weight(1f)
                     )
 
                     Text(
-                        "$differentAbove / ${differentPairs.size}",
-
-                        modifier =
-                            Modifier.weight(1f)
+                        "$differentAbove / ${differentPairs.size}", modifier = Modifier.weight(1f)
                     )
                 }
             }
 
-            Spacer(
-                Modifier.height(8.dp)
-            )
+            HorizontalDivider()
 
             Text(
-                "This is measurement only. " +
-                        "We are not selecting a new " +
-                        "production threshold yet.",
-
-                style =
-                    MaterialTheme.typography.bodySmall
+                text = "Diagnostic measurements only. No production threshold is selected by this test.",
+                style = MaterialTheme.typography.bodySmall
             )
         }
     }
@@ -1120,50 +1099,24 @@ private fun ThresholdSweep(
 private fun SectionTitle(
     text: String
 ) {
-
     Text(
-        text = text,
-
-        style =
-            MaterialTheme.typography.titleMedium,
-
-        fontWeight =
-            FontWeight.Bold
+        text = text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold
     )
 }
 
-private fun median(
-    values: List<Float>
-): Float {
+private fun formatMetric(value: Double): String {
+    return String.format(Locale.US, "%.2f", value)
+}
 
-    if (values.isEmpty()) {
-        return 0f
-    }
+private fun median(values: List<Double>): Double {
+    if (values.isEmpty()) return 0.0
 
-    val sorted =
-        values.sorted()
-
-    val middle =
-        sorted.size / 2
+    val sorted = values.sorted()
+    val middle = sorted.size / 2
 
     return if (sorted.size % 2 == 0) {
-
-        (
-                sorted[middle - 1] +
-                        sorted[middle]
-                ) / 2f
-
+        (sorted[middle - 1] + sorted[middle]) / 2.0
     } else {
-
         sorted[middle]
     }
 }
-
-private fun formatSimilarity(
-    value: Float
-): String =
-    String.format(
-        Locale.US,
-        "%.4f",
-        value
-    )

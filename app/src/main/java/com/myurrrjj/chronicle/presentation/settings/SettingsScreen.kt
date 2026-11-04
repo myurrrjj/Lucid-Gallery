@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.ViewDay
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -79,7 +80,8 @@ sealed interface SettingItem {
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
-    viewModel: SettingsViewModel = hiltViewModel()
+    viewModel: SettingsViewModel = hiltViewModel(),
+    onOpenFaceLab: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val haptic = LocalHapticFeedback.current
@@ -155,6 +157,14 @@ fun SettingsScreen(
                         when (item) {
                             is SettingItem.Toggle -> SettingsToggleCard(item)
                             is SettingItem.SegmentedOptions<*> -> SettingsSegmentedCard(item)
+                        }
+                    }
+                    item {
+                        Button(
+                            onClick = onOpenFaceLab,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Developer Tools — Face Quality Lab")
                         }
                     }
                 }

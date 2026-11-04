@@ -12,7 +12,7 @@ import javax.inject.Singleton
 import kotlin.math.abs
 
 data class FaceDetectionDiagnostic(
-    val face: Face, val accepted: Boolean, val rejectionReasons: List<String>
+    val face: Face, val accepted: Boolean, val rejectionReasons: List<String>,val qualityMetrics: FaceQualityMetrics?=null
 )
 
 @Singleton
@@ -21,26 +21,17 @@ class MlKitFaceDetector @Inject constructor() {
     private val faceDetector by lazy {
 
         val options = FaceDetectorOptions.Builder().setPerformanceMode(
-                FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE
-            ).setLandmarkMode(
-                FaceDetectorOptions.LANDMARK_MODE_ALL
-            ).setClassificationMode(
-                FaceDetectorOptions.CLASSIFICATION_MODE_ALL
-            )/*
-                 * We are processing independent still images,
-                 * not a video stream.
-                 *
-                 * Tracking therefore isn't useful here.
-                 */.setMinFaceSize(0.03f).build()
+            FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE
+        ).setLandmarkMode(
+            FaceDetectorOptions.LANDMARK_MODE_ALL
+        ).setClassificationMode(
+            FaceDetectorOptions.CLASSIFICATION_MODE_ALL
+        ).setMinFaceSize(0.03f).build()
 
         FaceDetection.getClient(options)
     }
 
-    /**
-     * Production API.
-     *
-     * Returns only faces that pass our validation.
-     */
+
     suspend fun detectFaces(
         bitmap: Bitmap
     ): List<Face> {
@@ -48,14 +39,10 @@ class MlKitFaceDetector @Inject constructor() {
         return detectFacesWithDiagnostics(bitmap).filter { it.accepted }.map { it.face }
     }
 
-    /**
-     * Diagnostic API used by DirtyTest.
-     *
-     * Returns every face detected by ML Kit,
-     * including rejected faces.
-     */
+
     suspend fun detectFacesWithDiagnostics(
-        bitmap: Bitmap
+        bitmap: Bitmap,
+        includeQualityMetrics: Boolean = false
     ): List<FaceDetectionDiagnostic> {
 
         return try {
@@ -69,9 +56,28 @@ class MlKitFaceDetector @Inject constructor() {
             rawFaces.map { face ->
 
                 val reasons = validationReasons(face)
+                val qualityMetrics = if (includeQualityMetrics){
+                    val landmarkCount = listOf(
+                        FaceLandmark.LEFT_EYE,
+                        FaceLandmark.RIGHT_EYE,
+                        FaceLandmark.NOSE_BASE,
+                        FaceLandmark.MOUTH_LEFT,
+                        FaceLandmark.MOUTH_RIGHT
+                    ).count {
+                        face.getLandmark(it)!=null
+                    }
+                    FaceQualityAssessor.assess(
+                        bitmap = bitmap,
+                        faceBounds = face.boundingBox,
+                        alignmentLandmarkCount = landmarkCount
+                    )
+                }
+                else{
+                    null
+                }
 
                 FaceDetectionDiagnostic(
-                    face = face, accepted = reasons.isEmpty(), rejectionReasons = reasons
+                    face = face, accepted = reasons.isEmpty(), rejectionReasons = reasons,qualityMetrics = qualityMetrics
                 )
             }
 
@@ -91,20 +97,7 @@ class MlKitFaceDetector @Inject constructor() {
         faceDetector.close()
     }
 
-    /**
-     * Recognition-oriented validation.
-     *
-     * This is intentionally permissive.
-     *
-     * We do NOT require:
-     * - eye landmarks
-     * - mouth landmarks
-     * - eye-open probability
-     * - smiling probability
-     *
-     * Those are not necessary just to establish
-     * that ML Kit detected a face.
-     */
+
     private fun validationReasons(
         face: Face
     ): List<String> {
@@ -124,11 +117,7 @@ class MlKitFaceDetector @Inject constructor() {
             return reasons
         }
 
-        /*
-         * Very small detections are still rejected,
-         * because they are generally not useful for
-         * face recognition.
-         */
+
         if (width < 40 || height < 40) {
 
             reasons += "face too small: ${width}x$height"
@@ -136,47 +125,35 @@ class MlKitFaceDetector @Inject constructor() {
 
         val aspectRatio = height.toFloat() / width.toFloat()
 
-        /*
-         * Extremely broad tolerance.
-         */
-        if (aspectRatio < 0.60f || aspectRatio > 2.50f) {
+
+        if (aspectRatio !in 0.60f..2.50f) {
 
             reasons += "unusual face-box aspect ratio: %.2f".format(aspectRatio)
         }
 
-        /*
-         * Very permissive head-pose limits.
-         *
-         * Alignment can handle moderate pose differences,
-         * so we should not throw away potentially useful faces.
-         */
+
         if (abs(face.headEulerAngleX) > 60f) {
 
             reasons += "head X angle too large: %.1f°".format(
-                    face.headEulerAngleX
-                )
+                face.headEulerAngleX
+            )
         }
 
         if (abs(face.headEulerAngleY) > 60f) {
 
             reasons += "head Y angle too large: %.1f°".format(
-                    face.headEulerAngleY
-                )
+                face.headEulerAngleY
+            )
         }
 
         if (abs(face.headEulerAngleZ) > 60f) {
 
             reasons += "head Z angle too large: %.1f°".format(
-                    face.headEulerAngleZ
-                )
+                face.headEulerAngleZ
+            )
         }
 
-        /*
-         * If both eyes exist, keep the geometry check
-         * only as a very broad sanity check.
-         *
-         * Missing eyes are completely acceptable here.
-         */
+
         val leftEye = face.getLandmark(
             FaceLandmark.LEFT_EYE
         )?.position
@@ -193,11 +170,11 @@ class MlKitFaceDetector @Inject constructor() {
 
             val eyeDistanceRatio = eyeDistance / width.toFloat()
 
-            if (eyeDistanceRatio < 0.10f || eyeDistanceRatio > 0.90f) {
+            if (eyeDistanceRatio !in 0.10f..0.90f) {
 
                 reasons += "unusual eye-distance ratio: %.2f".format(
-                        eyeDistanceRatio
-                    )
+                    eyeDistanceRatio
+                )
             }
         }
 

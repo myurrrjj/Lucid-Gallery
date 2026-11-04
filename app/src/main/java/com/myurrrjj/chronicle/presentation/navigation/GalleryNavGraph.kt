@@ -165,7 +165,11 @@ fun GalleryNavGraph() {
             }
             composable<Settings> {
                 SettingsScreen(
-                    onNavigateBack = { navController.popBackStack() })
+                    onNavigateBack = { navController.popBackStack() },
+                    onOpenFaceLab = {
+                        navController.navigate(DirtyTest)
+                    }
+                )
             }
 
             composable<Route.Search>(
