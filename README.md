@@ -29,71 +29,31 @@ It is built on a strict MVI architecture with a single source of truth per scree
 
 ## Screenshots
 
-Drop your images into `docs/screenshots/` using the filenames below, or drag and drop straight over each placeholder in the GitHub editor.
-
 ### Homescreen
 
-| All, Day grouping | Month grouping | Year grouping |
-|---|---|---|
-| ![Homescreen, day view](docs/screenshots/home-day.png) | ![Homescreen, month view](docs/screenshots/home-month.png) | ![Homescreen, year view](docs/screenshots/home-year.png) |
+Pinch the grid to move between Day, Month and Year grouping.
+
+| Day | Month | Year |
+|:---:|:---:|:---:|
+| ![Homescreen, Day grouping](docs/screenshots/01-gallery-day.jpg) | ![Homescreen, Month grouping](docs/screenshots/02-gallery-month.jpg) | ![Homescreen, Year grouping](docs/screenshots/03-gallery-year.jpg) |
 
 ### Albums
 
 | Album grid | Album opened |
-|---|---|
-| ![Albums](docs/screenshots/albums.png) | ![Album detail](docs/screenshots/album-detail.png) |
-
-### Videos
-
-| Video tab | Custom player |
-|---|---|
-| ![Videos](docs/screenshots/videos.png) | ![Video player](docs/screenshots/video-player.png) |
+|:---:|:---:|
+| ![Albums](docs/screenshots/04-albums.jpg) | ![Album opened](docs/screenshots/05-album-detail.jpg) |
 
 ### Favourites
 
-| Favourites grid | Empty state |
-|---|---|
-| ![Favourites](docs/screenshots/favourites.png) | ![Empty favourites](docs/screenshots/favourites-empty.png) |
-
-### People
-
-| People grid | Indexing in progress | Paused |
-|---|---|---|
-| ![People](docs/screenshots/people.png) | ![Indexing progress](docs/screenshots/people-progress.png) | ![Indexing paused](docs/screenshots/people-paused.png) |
-
-| Person opened | Rename dialog |
-|---|---|
-| ![Person detail](docs/screenshots/person-detail.png) | ![Rename person](docs/screenshots/person-rename.png) |
-
-### Detail viewer
-
-| Photo | Zoomed | Info sheet |
-|---|---|---|
-| ![Photo detail](docs/screenshots/photo-detail.png) | ![Zoomed photo](docs/screenshots/photo-zoom.png) | ![Info sheet](docs/screenshots/info-sheet.png) |
-
-### Selection mode
-
-| Multi select | Contextual bar |
-|---|---|
-| ![Selection](docs/screenshots/selection.png) | ![Selection bar](docs/screenshots/selection-bar.png) |
+<img src="docs/screenshots/06-favourites.jpg" alt="Favourites" width="320">
 
 ### Search
 
-| Results | Indexing overlay |
-|---|---|
-| ![Search](docs/screenshots/search.png) | ![Search indexing](docs/screenshots/search-indexing.png) |
+<img src="docs/screenshots/07-search.jpg" alt="Search" width="320">
 
-### SettingsScreen
+### Video player
 
-| Settings top | Face indexing controls |
-|---|---|
-| ![Settings](docs/screenshots/settings.png) | ![Face indexing settings](docs/screenshots/settings-face.png) |
-
-### Face Quality Lab (developer tool)
-
-| Dataset | Metrics and similarity |
-|---|---|
-| ![Face lab](docs/screenshots/face-lab.png) | ![Face lab results](docs/screenshots/face-lab-results.png) |
+<img src="docs/screenshots/08-video-player.jpg" alt="Custom video player" width="100%">
 
 ---
 
